@@ -46,6 +46,13 @@ from typing import Any, Dict, Optional
 # SteeredPolicyWrapper pops this from obs before dispatching.
 STEERING_KEY = "__steering__"
 
+# Response key for research-only intervention diagnostics. A server started with
+# --steering_diagnostics attaches result[STEERING_DIAGNOSTICS_KEY] = [record, ...]
+# to every steered response: one dict of scalar summaries per steering-hook
+# application (layer, denoising_step, token_count, delta-norm statistics, ...).
+# Never present on unsteered responses. See openpi.serving.steering.
+STEERING_DIAGNOSTICS_KEY = "steering_diagnostics"
+
 # Strategies (see openpi.serving.steering for the math):
 #   global          — h' = (1-β)h + β(h @ C_contrastive.T), α selects aperture
 #   per_step        — same but a DIFFERENT conceptor by position. For pi0.5 this

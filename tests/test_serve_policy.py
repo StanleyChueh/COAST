@@ -66,12 +66,13 @@ def stub_policy_creation(monkeypatch):
             self.metadata = {"fake": True}
 
     class _FakeSteered:
-        def __init__(self, policy, *, conceptor_npz_path, device):
+        def __init__(self, policy, *, conceptor_npz_path, device, record_diagnostics=False):
             steering_calls.append(
                 {
                     "policy": policy,
                     "conceptor_npz_path": conceptor_npz_path,
                     "device": device,
+                    "record_diagnostics": record_diagnostics,
                 }
             )
             self.metadata = {"fake": True, "steering_enabled": True}
@@ -104,12 +105,14 @@ def _args(
     config: str = "some_config",
     steer: bool = False,
     conceptor_npz: str | None = None,
+    steering_diagnostics: bool = False,
 ) -> serve_policy.Args:
     return serve_policy.Args(
         collect_activations=collect_activations,
         pytorch=pytorch,
         steer=steer,
         conceptor_npz=conceptor_npz,
+        steering_diagnostics=steering_diagnostics,
         output_dir="/tmp/never-used",
         policy=serve_policy.Checkpoint(config=config, dir="/tmp/fake/5000"),
     )
@@ -263,3 +266,45 @@ def test_steer_pi05_with_conceptor_wraps_policy(monkeypatch, stub_policy_creatio
     assert len(stub_policy_creation.steering) == 1
     assert stub_policy_creation.steering[0]["conceptor_npz_path"] == "/tmp/fake.npz"
     assert stub_policy_creation.steering[0]["device"] == "cpu"
+    assert stub_policy_creation.steering[0]["record_diagnostics"] is False
+
+
+def test_steering_diagnostics_requires_steer(monkeypatch, stub_policy_creation):
+    """--steering_diagnostics only makes sense with steering hooks installed."""
+    _patch_get_config(monkeypatch, _model.ModelType.PI05)
+    args = _args(collect_activations=False, pytorch=True, config="pi05_libero", steering_diagnostics=True)
+    with pytest.raises(ValueError, match="--steering_diagnostics requires --steer"):
+        serve_policy.main(args)
+    assert stub_policy_creation.created == []
+
+
+def test_steering_diagnostics_pi0_fast_is_rejected(monkeypatch, stub_policy_creation):
+    """pi0-fast steering is a JAX pre-logit intervention with no PyTorch hooks to instrument."""
+    _patch_get_config(monkeypatch, _model.ModelType.PI0_FAST)
+    args = _args(
+        collect_activations=False,
+        pytorch=False,
+        config="pi0_fast_libero",
+        steer=True,
+        conceptor_npz="/tmp/fake-fast.npz",
+        steering_diagnostics=True,
+    )
+    with pytest.raises(ValueError, match="--steering_diagnostics requires pi0/pi0.5"):
+        serve_policy.main(args)
+    assert stub_policy_creation.created == []
+
+
+def test_steering_diagnostics_pi05_reaches_wrapper(monkeypatch, stub_policy_creation):
+    """With --steer --steering_diagnostics, the wrapper is built with record_diagnostics=True."""
+    _patch_get_config(monkeypatch, _model.ModelType.PI05)
+    args = _args(
+        collect_activations=False,
+        pytorch=True,
+        config="pi05_libero",
+        steer=True,
+        conceptor_npz="/tmp/fake.npz",
+        steering_diagnostics=True,
+    )
+    serve_policy.main(args)
+    assert len(stub_policy_creation.steering) == 1
+    assert stub_policy_creation.steering[0]["record_diagnostics"] is True

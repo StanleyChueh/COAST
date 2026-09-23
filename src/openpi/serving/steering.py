@@ -42,6 +42,7 @@ import numpy as np
 # openpi_client.steering so sub-venv clients can import the same values).
 # See that module for the math docstring per strategy.
 from openpi_client.steering import ALLOWED_STRATEGIES
+from openpi_client.steering import STEERING_DIAGNOSTICS_KEY
 from openpi_client.steering import STEERING_KEY as _STEERING_KEY
 import torch
 
@@ -338,6 +339,40 @@ def available_tasks(npz: Any) -> set[str]:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
+def intervention_summary(h: torch.Tensor, h_steered: torch.Tensor) -> dict[str, int | float]:
+    """Scalar summary of one hook application (research diagnostics; no tensors kept).
+
+    Norms are per token (L2 over the hidden dim, leading dims flattened) and are
+    computed in float32 from the tensors the model actually sees, so
+    ``h_steered - h`` is the realized modification after the model's dtype cast.
+    ``mean_cosine_delta_hidden`` is the mean per-token cos(h_steered - h, h):
+    -1 means the intervention only shrinks h along itself, 0 means it is orthogonal to h.
+    """
+    d = h.shape[-1]
+    h32 = h.detach().to(torch.float32).reshape(-1, d)
+    delta = h_steered.detach().to(torch.float32).reshape(-1, d) - h32
+    delta_norm = torch.linalg.vector_norm(delta, dim=-1)
+    h_norm = torch.linalg.vector_norm(h32, dim=-1)
+    # Zero-norm tokens give 0 rather than NaN (for the conceptor hook, h = 0 implies delta = 0).
+    tiny = torch.finfo(torch.float32).tiny
+    relative = delta_norm / h_norm.clamp_min(tiny)
+    cosine = (delta * h32).sum(dim=-1) / (delta_norm * h_norm).clamp_min(tiny)
+    stats = torch.stack(
+        [delta_norm.mean(), delta_norm.max(), relative.mean(), relative.max(), h_norm.mean(), cosine.mean()]
+    )
+    mean_delta, max_delta, mean_rel, max_rel, mean_h, mean_cos = stats.tolist()  # one device sync
+    return {
+        "token_count": int(h32.shape[0]),
+        "hidden_dim": int(d),
+        "mean_delta_norm": mean_delta,
+        "max_delta_norm": max_delta,
+        "mean_relative_delta": mean_rel,
+        "max_relative_delta": max_rel,
+        "mean_hidden_norm": mean_h,
+        "mean_cosine_delta_hidden": mean_cos,
+    }
+
+
 class ConceptorSteeringHook:
     """PyTorch forward hook that applies h' = (1-β)h + β(C @ h).
 
@@ -351,6 +386,11 @@ class ConceptorSteeringHook:
         ``M_t`` at forward time based on ``self.current_denoise_step`` (set by
         the sampler via ``set_denoise_step(t)``). Used by the ``per_step``
         strategy. List length must equal the pi0.5 schedule's 10 steps.
+
+    ``layer`` labels the expert layer the hook is attached to. With
+    ``record_diagnostics=True`` each call also appends a dict of scalar
+    summaries (see ``intervention_summary``) to ``self.diagnostics``; the
+    steered output is identical either way.
     """
 
     def __init__(
@@ -360,11 +400,16 @@ class ConceptorSteeringHook:
         device: str = "cuda",
         *,
         matrices_per_step: list[np.ndarray] | None = None,
+        layer: int | None = None,
+        record_diagnostics: bool = False,
     ) -> None:
         self.beta = float(beta)
         self.current_denoise_step = 0
         self._device = device
         self.intervention_norms: list[float] = []
+        self.layer = layer
+        self.record_diagnostics = record_diagnostics
+        self.diagnostics: list[dict[str, Any]] = []
 
         if (conceptor_matrix is None) == (matrices_per_step is None):
             raise ValueError(
@@ -402,6 +447,15 @@ class ConceptorSteeringHook:
         M = M.to(device=h.device, dtype=h.dtype)
         h_steered = torch.matmul(h, M.T)
         self.intervention_norms.append(torch.norm(h_steered - h).item())
+        if self.record_diagnostics:
+            self.diagnostics.append(
+                {
+                    "layer": self.layer,
+                    "denoising_step": self.current_denoise_step,
+                    "beta": self.beta,
+                    **intervention_summary(h, h_steered),
+                }
+            )
         if rest is not None:
             return (h_steered, *rest)
         return h_steered
@@ -411,6 +465,7 @@ class ConceptorSteeringHook:
 
     def reset_logs(self) -> None:
         self.intervention_norms = []
+        self.diagnostics = []
 
     def __repr__(self) -> str:
         if self._Ms is not None:
@@ -438,7 +493,15 @@ class LinearSteeringHook:
     magnitude. No β parameter — the interpolation weight is baked into ``alpha``.
     """
 
-    def __init__(self, direction: np.ndarray, alpha: float = 1.0, device: str = "cuda") -> None:
+    def __init__(
+        self,
+        direction: np.ndarray,
+        alpha: float = 1.0,
+        device: str = "cuda",
+        *,
+        layer: int | None = None,
+        record_diagnostics: bool = False,
+    ) -> None:
         if direction.ndim != 1:
             raise ValueError(f"LinearSteeringHook expects 1-D direction, got shape {direction.shape}")
         self.alpha = float(alpha)
@@ -446,6 +509,9 @@ class LinearSteeringHook:
         # Broadcasts against (batch, seq, d) additions.
         self.v = torch.from_numpy(np.ascontiguousarray(direction)).to(dtype=torch.float32, device=device)
         self.intervention_norms: list[float] = []
+        self.layer = layer
+        self.record_diagnostics = record_diagnostics
+        self.diagnostics: list[dict[str, Any]] = []
 
     def __call__(self, module, input, output):
         if isinstance(output, tuple):
@@ -459,6 +525,15 @@ class LinearSteeringHook:
         delta = self.alpha * v  # (d,); broadcasts to h
         h_steered = h + delta
         self.intervention_norms.append(torch.norm(h_steered - h).item())
+        if self.record_diagnostics:
+            self.diagnostics.append(
+                {
+                    "layer": self.layer,
+                    "denoising_step": self.current_denoise_step,
+                    "alpha": self.alpha,
+                    **intervention_summary(h, h_steered),
+                }
+            )
         if rest is not None:
             return (h_steered, *rest)
         return h_steered
@@ -468,6 +543,7 @@ class LinearSteeringHook:
 
     def reset_logs(self) -> None:
         self.intervention_norms = []
+        self.diagnostics = []
 
     def __repr__(self) -> str:
         d = self.v.shape[0]
@@ -542,15 +618,30 @@ class SteeredPolicyWrapper:
 
     Hooks are cached on the wrapper instance so repeated configs — common
     within a single-task eval loop — don't rebuild the 1024×1024 M matrix.
+
+    With ``record_diagnostics=True`` (research only, pi0/pi0.5 hooks), every
+    steered response also carries ``result[STEERING_DIAGNOSTICS_KEY]``: the
+    hook's per-application scalar records for that call. Unsteered responses
+    never carry it.
     """
 
-    def __init__(self, policy: Any, conceptor_npz_path: str | pathlib.Path, device: str) -> None:
+    def __init__(
+        self,
+        policy: Any,
+        conceptor_npz_path: str | pathlib.Path,
+        device: str,
+        *,
+        record_diagnostics: bool = False,
+    ) -> None:
         self._policy = policy
         self._npz = load_conceptor_npz(conceptor_npz_path)
         self._available_tasks = available_tasks(self._npz)
         self._device = device
         self._model_type = _policy_model_type(policy)
         self._is_fast = self._model_type == _model.ModelType.PI0_FAST
+        if record_diagnostics and self._is_fast:
+            raise ValueError("Steering diagnostics are only available for pi0/pi0.5 PyTorch hooks, not pi0-fast")
+        self._record_diagnostics = record_diagnostics
         # Cache key is strategy-projected: only the params the strategy actually
         # uses contribute. See _cache_key(). Avoids rebuilding identical hooks
         # just because an irrelevant CLI flag differs during a sweep.
@@ -634,6 +725,8 @@ class SteeredPolicyWrapper:
                     strategy=strategy,
                 )
                 hook = ConceptorSteeringHook(C, beta=float(payload["beta"]), device=self._device)
+            hook.layer = key[1]
+            hook.record_diagnostics = self._record_diagnostics
             self._hook_cache[key] = hook
             logger.info("Built steering hook %s [%s] (cache size=%d)", key, type(hook).__name__, len(self._hook_cache))
         else:
@@ -692,6 +785,9 @@ class SteeredPolicyWrapper:
             )
         layer, hook = self._get_or_build_hook(payload)
         result, _ = self._policy.infer_with_steering(clean_obs, steering_hooks=[(layer, hook)], **noise_kwargs)
+        if self._record_diagnostics:
+            # _get_or_build_hook resets the hook's logs, so these are this call's records only.
+            result[STEERING_DIAGNOSTICS_KEY] = list(hook.diagnostics)
         return result
 
     def reset(self) -> None:
@@ -707,6 +803,7 @@ class SteeredPolicyWrapper:
             "num_conceptor_tasks": len(self._available_tasks),
             "steering_model_type": self._model_type.value if self._model_type is not None else "unknown",
             "steering_backend": "jax_fast" if self._is_fast else "pytorch_hooks",
+            "steering_diagnostics_enabled": self._record_diagnostics,
         }
 
 

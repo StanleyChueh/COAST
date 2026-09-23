@@ -93,6 +93,11 @@ class Args:
     # Download the appropriate {env}-conceptors dataset, or rebuild via
     # experiments/{libero,robocasa,metaworld,droid}/compute_conceptors.py.
     conceptor_npz: str | None = None
+    # Research diagnostics (requires --steer, pi0/pi0.5): attach per-hook-application scalar
+    # summaries of the intervention (layer, denoising step, ||h_steered - h|| statistics) to
+    # every steered response under "steering_diagnostics". No tensors are stored; the
+    # steered computation is unchanged. See openpi.serving.steering.intervention_summary.
+    steering_diagnostics: bool = False
 
     # Research control: honor obs["__noise_control__"] = {master_seed, task_id, init_state,
     # rollout_step} by deriving the initial flow noise deterministically from that key and
@@ -226,6 +231,12 @@ def main(args: Args) -> None:
                 "(sample_actions_with_steering uses PyTorch hooks for diffusion models)."
             )
 
+    if args.steering_diagnostics:
+        if not args.steer:
+            raise ValueError("--steering_diagnostics requires --steer.")
+        if resolve_policy_model_type(args) == _model.ModelType.PI0_FAST:
+            raise ValueError("--steering_diagnostics requires pi0/pi0.5 PyTorch steering hooks; pi0-fast has none.")
+
     if args.noise_control:
         if args.collect_activations:
             raise ValueError("--noise_control and --collect_activations are mutually exclusive.")
@@ -264,7 +275,14 @@ def main(args: Args) -> None:
     if args.steer:
         device = str(getattr(policy, "_pytorch_device", None) or "cpu")
         logging.info("Steering enabled: loading conceptor NPZ from %s (device=%s)", args.conceptor_npz, device)
-        policy = SteeredPolicyWrapper(policy, conceptor_npz_path=args.conceptor_npz, device=device)
+        if args.steering_diagnostics:
+            logging.info("Steering diagnostics enabled: steered responses carry per-hook scalar summaries")
+        policy = SteeredPolicyWrapper(
+            policy,
+            conceptor_npz_path=args.conceptor_npz,
+            device=device,
+            record_diagnostics=args.steering_diagnostics,
+        )
 
     if noise_shape is not None:
         # Outermost wrapper, so __noise_control__ is removed before steering / input transforms see the obs.

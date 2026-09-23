@@ -36,7 +36,11 @@ from openpi_client.noise_control import (
     NOISE_CONTROL_KEY,
     build_noise_control_payload,
 )
-from openpi_client.steering import STEERING_KEY, build_steering_payload
+from openpi_client.steering import (
+    STEERING_DIAGNOSTICS_KEY,
+    STEERING_KEY,
+    build_steering_payload,
+)
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
@@ -154,6 +158,13 @@ class Args:
     # init_state, rollout_step). Per-request noise fingerprints echoed by the
     # server are checked and written to <task_output_dir>/noise_fingerprints.jsonl.
     policy_noise_seed: Optional[int] = None
+
+    # ── Steering intervention diagnostics (research only). ──────────────────────
+    # Requires --steer and a server started with --steering_diagnostics. Each
+    # steered response carries one scalar record per steering-hook application;
+    # they are written, tagged with episode / init_state / rollout_step, to
+    # <task_output_dir>/steering_diagnostics.jsonl.
+    log_steering_diagnostics: bool = False
 
 
 def tile_frames(frames: List[np.ndarray]) -> np.ndarray:
@@ -292,6 +303,29 @@ def check_noise_echo(result: Dict, payload: Dict[str, int]) -> Dict:
     return echo
 
 
+def steering_diagnostic_records(
+    result: Dict, episode: int, init_state: int, rollout_step: int, args: Args
+) -> List[Dict]:
+    """Tag the server's per-hook diagnostics with the rollout coordinate."""
+    records = result.get(STEERING_DIAGNOSTICS_KEY)
+    if not isinstance(records, list) or not records:
+        raise RuntimeError(
+            "Steered response has no {!r} records; is the server running with "
+            "--steering_diagnostics?".format(STEERING_DIAGNOSTICS_KEY)
+        )
+    tagged = []
+    for record in records:
+        row = {
+            "episode": episode,
+            "init_state": init_state,
+            "rollout_step": rollout_step,
+        }
+        row.update(record)
+        row.update(alpha=args.steering_alpha, strategy=args.steering_strategy)
+        tagged.append(row)
+    return tagged
+
+
 def eval_task(
     task_suite_name: str,
     task_id: int,
@@ -331,6 +365,11 @@ def eval_task(
     noise_log = None
     if args.policy_noise_seed is not None:
         noise_log = open(os.path.join(task_output_dir, "noise_fingerprints.jsonl"), "w")
+    diagnostics_log = None
+    if args.log_steering_diagnostics:
+        diagnostics_log = open(
+            os.path.join(task_output_dir, "steering_diagnostics.jsonl"), "w"
+        )
 
     # --seed acts as an offset into LIBERO's canonical initial-state list so
     # different seeds evaluate on disjoint start conditions. Pick seeds ≥
@@ -408,6 +447,11 @@ def eval_task(
                                 sha256=echo["sha256"],
                             )
                             noise_log.write(json.dumps(record, sort_keys=True) + "\n")
+                        if diagnostics_log is not None:
+                            for row in steering_diagnostic_records(
+                                result, episode, state_idx, rollout_step, args
+                            ):
+                                diagnostics_log.write(json.dumps(row) + "\n")
                         action_chunk = np.asarray(result["actions"], dtype=np.float32)
                         if action_chunk.ndim != 2:
                             raise ValueError(
@@ -451,6 +495,8 @@ def eval_task(
         env.close()
         if noise_log is not None:
             noise_log.close()
+        if diagnostics_log is not None:
+            diagnostics_log.close()
 
     return {
         "success_rate": float(np.mean(successes)) if successes else 0.0,
@@ -476,6 +522,8 @@ def quat_to_axisangle(quat: np.ndarray) -> np.ndarray:
 def _validate_args(args: Args) -> None:
     if args.collect and args.steer:
         raise ValueError(_MUTUALLY_EXCLUSIVE_MODE_ERROR)
+    if args.log_steering_diagnostics and not args.steer:
+        raise ValueError("--log_steering_diagnostics requires --steer")
 
 
 def main(args: Args) -> None:
@@ -490,6 +538,13 @@ def main(args: Args) -> None:
     ):
         raise ValueError(
             "--policy_noise_seed requires a server started with --noise_control"
+        )
+    if args.log_steering_diagnostics and not server_metadata.get(
+        "steering_diagnostics_enabled"
+    ):
+        raise ValueError(
+            "--log_steering_diagnostics requires a server started with "
+            "--steering_diagnostics"
         )
 
     if args.output_dir is not None:

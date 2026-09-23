@@ -1,0 +1,193 @@
+# Phase 0 smoke test: unsteered pi0.5 baseline on LIBERO-10 task 0.
+# This is an engineering smoke test only; the 3-episode success rate has no scientific meaning.
+
+experiment_id: phase0_smoke_pi05_libero10_task00_seed0_3ep
+timestamp: "2026-09-23T14:44:53+08:00"  # client start; client end 2026-09-23T14:45:29+08:00
+paper: "Contrastive Conceptor Activation Steering (COAST): Unlocking Vision-Language-Action Models through Hidden States"
+arxiv_id: "2605.17144"
+git_commit: 2afa10ee256a3b3edfeb56500fea166a0837f119
+branch: repro/arxiv-2605-17144
+git_remotes:
+  origin: https://github.com/StanleyChueh/COAST.git
+  upstream: https://github.com/COAST-VLA/COAST.git
+
+model: pi0.5
+policy_config: pi05_libero
+backend: pytorch  # --pytorch; auto-converted from the JAX checkpoint to bf16 model.safetensors
+checkpoint: brandonyang/openpi-libero-2000
+checkpoint_revision: aaeeabc72f8a50a8fa2d04544332c8ec1cd0142e
+checkpoint_path: checkpoints/openpi-libero-2000
+checkpoint_training_step: 2000
+
+task_suite: libero_10
+task_id: 0
+task_name: LIVING_ROOM_SCENE2_put_both_the_alphabet_soup_and_the_tomato_sauce_in_the_basket
+task_language: "put both the alphabet soup and the tomato sauce in the basket"
+num_episodes: 3
+seed: 0  # env.seed(0), np.random.seed(0); episode k uses initial_states[(0 + k) % 50] -> init states 0, 1, 2
+init_state_indices: [0, 1, 2]
+max_steps: 520  # SUITE_MAX_STEPS["libero_10"], plus num_steps_wait=10
+replan_steps: 5
+resize_size: 224
+steering: false
+activation_collection: false
+
+physical_gpu_id: 0
+gpu_model: NVIDIA GeForce RTX 4090 (24564 MiB)
+CUDA_VISIBLE_DEVICES: "0"
+
+commands:
+  policy_server: >-
+    CUDA_VISIBLE_DEVICES=0 uv run --no-sync scripts/serve_policy.py --pytorch --port 8000
+    policy:checkpoint --policy.config pi05_libero --policy.dir checkpoints/openpi-libero-2000
+  policy_server_cwd: /home/stanley/Stanley_ws/COAST-research/COAST
+  libero_client: >-
+    CUDA_VISIBLE_DEVICES=0 MUJOCO_GL=egl
+    LIBERO_CONFIG_PATH=/home/stanley/Stanley_ws/COAST-research/libero_config_coast
+    uv run --no-sync python main.py --task_suite_name libero_10 --task_id 0
+    --num_episodes 3 --seed 0 --port 8000 --output_dir output/phase0_smoke
+  libero_client_cwd: /home/stanley/Stanley_ws/COAST-research/COAST/examples/libero_env
+  note: "--no-sync only skips uv's pre-run re-sync of an already-synced venv; otherwise identical to the documented `uv run`."
+
+baseline_successes: 3
+baseline_failures: 0
+success_rate: 1.0
+per_episode:
+  - {episode: 0, init_state: 0, success: true, video_frames: 286}
+  - {episode: 1, init_state: 1, success: true, video_frames: 295}
+  - {episode: 2, init_state: 2, success: true, video_frames: 321}
+# video_frames = loop iterations incl. 10 settle steps (one frame per iteration, loop breaks on success)
+
+runtime:
+  client_wall_clock_s: 36.2  # all 3 episodes
+  server_startup_s: ~90  # launch 14:43:25 -> listening; includes one-time JAX->PyTorch conversion
+  root_uv_sync: 3h15m (network-bound)
+  libero_uv_sync: 13m (second attempt)
+  submodule_init: 30.6 min
+  checkpoint_download: 18.7 min
+  inference_latency_s: {first: 0.139, median: 0.124}  # post-run probe, one 10x7 action chunk per call
+
+vram:
+  gpu0_idle_mib: 18
+  server_loaded_idle_mib: 7585
+  peak_during_rollout_mib: 8596
+  peak_gpu_util_pct: 68
+  source: examples/libero_env/output/phase0_smoke/gpu0_vram.csv (nvidia-smi, 2 s sampling)
+
+result_path: examples/libero_env/output/phase0_smoke/client.log  # main.py writes no results file for a single task; success is logged
+result_line: "[libero_10/LIVING_ROOM_SCENE2_put_both_the_alphabet_soup_and_the_tomato_sauce_in_the_basket/task_00] success_rate=1.00 (3/3)"
+server_log: examples/libero_env/output/phase0_smoke/server.log
+failed_server_attempt_log: examples/libero_env/output/phase0_smoke/server_attempt1_failed.log
+video_paths:
+  - examples/libero_env/output/phase0_smoke/00-living-room-scene2-put-both-the-alphabet-soup-and-the-tomato-sauce-in-the-basket/episode_000.mp4
+  - examples/libero_env/output/phase0_smoke/00-living-room-scene2-put-both-the-alphabet-soup-and-the-tomato-sauce-in-the-basket/episode_001.mp4
+  - examples/libero_env/output/phase0_smoke/00-living-room-scene2-put-both-the-alphabet-soup-and-the-tomato-sauce-in-the-basket/episode_002.mp4
+video_format: "10 fps, 256x512 RGB (agentview | wrist tiled), 180-degree rotated to training orientation"
+
+validation:
+  checkpoint_loads: true  # params restored (12.5 GiB), converted, norm stats loaded from checkpoint assets
+  policy_server_starts: true  # "server listening on 0.0.0.0:8000" (second attempt)
+  libero_simulator_starts: true
+  camera_observations_produced: true  # agentview + wrist 256x256 uint8 -> 224x224 policy inputs
+  language_instruction_reaches_policy: true  # probe: request without prompt -> server "ValueError: Prompt is required"; with prompt -> actions
+  actions_returned: true  # shape (10, 7), range [-0.987, 0.055] in probe
+  robot_moves: true  # probe: EEF moved 0.019 m in 30 policy steps; all 3 episodes reached task success
+  all_episodes_executed: true
+  success_recorded: true
+  result_files_written: true  # client.log; no JSON by design of main.py
+  videos_written: true
+  nan_or_inf: none_observed  # probe asserted np.isfinite on 6 chunks; no nan/inf in client or server logs
+  hidden_runtime_errors: none  # only expected warnings (robosuite macros, gym deprecation, LIBERO datasets path, jax rocm/tpu backends)
+  gpu_memory_reasonable: true  # 8.6 GiB peak of 24 GiB
+
+package_versions:
+  root_env:
+    python: 3.11.16
+    torch: 2.7.1+cu126
+    torch_cuda: "12.6"
+    cudnn: 90501
+    jax: 0.5.3
+    flax: 0.10.2
+    transformers: 4.53.2 (+ openpi transformers_replace patch)
+    orbax_checkpoint: 0.11.13
+    numpy: 1.26.4
+    openpi_client: 0.1.0
+    huggingface_hub: 0.32.3
+  libero_env:
+    python: 3.8.20
+    mujoco: 3.2.3
+    robosuite: 1.4.0
+    libero: third_party/libero @ d63b117ffd512be05f333a6609767b2ad8c30bae
+    numpy: 1.22.4
+    torch: 1.11.0+cu113
+    imageio: 2.35.1
+  host:
+    uv: 0.12.18
+    nvidia_driver: 580.178.04
+    cuda_nvidia_smi: "13.0"
+    os: Ubuntu 22.04.5 LTS, kernel 6.8.0-138-generic
+
+deviations_from_docs:
+  - "LIBERO config written to an isolated LIBERO_CONFIG_PATH (same content as setup_libero_config.py) instead of ~/.libero, to avoid affecting ~/Stanley_ws/lerobot."
+  - "Only params/ + assets/ + _CHECKPOINT_METADATA downloaded (train_state/ skipped, ~32 GB, not used for inference)."
+  - "Server run with --pytorch: the backend used by the COAST pipeline baseline (run_end_to_end.sh stage g1) and all pi0.5 steering. The README's plain single-task serve example uses JAX by default."
+
+problems_and_fixes:
+  - problem: "uv not installed"
+    fix: "installed uv 0.12.18 via official Astral installer to ~/.local/bin"
+  - problem: "libero uv sync: 'Failed to acquire lock on the distribution cache' (openpi-client editable)"
+    cause: "ran concurrently with root uv sync (self-inflicted)"
+    fix: "re-ran identical command after root sync finished"
+  - problem: "hf download fetched only assets/ (multi-value --include parsed as filenames)"
+    fix: "repeated --include flags"
+  - problem: "serve_policy --pytorch first run: ValueError Unrecognized configuration class GemmaConfig for AutoModel"
+    cause: "first-run transformers auto-patch purges gemma modules from sys.modules -> GemmaConfig class identity mismatch with AutoModel registry"
+    fix: "re-ran identical command (patch already on disk -> no purge). No code change. Repository bug worth reporting upstream."
+
+paper_vs_code_differences:
+  - topic: held-out test rollout count
+    paper: "30 held-out test rollouts per task per condition (Sec. 4.1, App. A.8.3, Tables 4-7)"
+    code: "run_end_to_end.sh final eval (g) uses NUM_EPISODES=15; README 'per-task tuned configs' example uses --num_episodes 10"
+    difference: "15 (or 10) vs 30 test episodes"
+    possible_consequence: "wider CIs; reported SR granularity differs (e.g. paper values are multiples of 1/30)"
+  - topic: data used for hyperparameter selection
+    paper: "15 fitting rollouts used both to construct conceptors and select hyperparameters (Sec. 4.1, A.8.5)"
+    code: "collection at seed 0 (15 eps); sweep at a separate seed 15 window (15 eps; find_best_configs default 10 eps, seed 7); eval at seed 30"
+    difference: "code uses a third, disjoint rollout set for selection"
+    possible_consequence: "different selection noise and possibly different chosen configs; code is stricter"
+  - topic: disjointness of initial conditions
+    paper: "test rollouts use entirely unseen environment configurations; no seeds shared with fitting set; env reset with sequential episode seeds (A.8.3, A.8.5)"
+    code: "main.py: env.seed(seed) once per run; episode k uses initial_states[(seed + k) % 50]; LIBERO has only 50 canonical init states per task"
+    difference: "with seeds 0/15/30 and 30 test episodes, eval states 30..49,0..9 would overlap collection states 0..9 (wrap-around). With 15 eval eps (current script) there is no overlap."
+    possible_consequence: "test/fit leakage if the paper's 30-episode protocol is run with the script's seeds; at most 50 distinct init states means 15+15+30 cannot be fully disjoint"
+  - topic: hyperparameter grid
+    paper: "Table 4 (pi0.5 LIBERO-10): layers {5, 11}; selected alpha values include 2.0 and 10.0; beta includes 0.5"
+    code: "find_best_configs.py defaults: layers (11,), alphas (0.1, 0.5, 1.0), betas (0.1, 0.3); per_step alpha fixed at 1.0 sentinel"
+    difference: "default code grid cannot produce several Table 4 configurations (L5, alpha=2.0/10.0, beta=0.5, per_step with alpha != 1.0)"
+    possible_consequence: "default sweep may not reproduce Table 4 numbers"
+  - topic: success labeling
+    paper: "labeled successful if the final step's info['is_success'] is True (A.8.3)"
+    code: "rollout terminates at the first done=True and records success=True"
+    difference: "early termination on first success vs final-step flag"
+    possible_consequence: "likely equivalent in practice; minor if a success could later be undone"
+  - topic: task naming in Table 4
+    paper: "abbreviations such as 'LR2' are used for two different tasks (alphabet soup + tomato sauce; cream cheese + butter)"
+    code: "libero_10 task 0 = LIVING_ROOM_SCENE2_put_both_the_alphabet_soup_and_the_tomato_sauce_in_the_basket"
+    difference: "ambiguous paper labels"
+    possible_consequence: "per-task comparisons need mapping by full task description, not abbreviation"
+  - topic: inference backend
+    paper: "not specified"
+    code: "pi0.5 steering and pipeline baseline use PyTorch, auto-converted from the JAX checkpoint (bf16)"
+    difference: "unspecified in paper"
+    possible_consequence: "JAX vs PyTorch numerics may shift baseline SR slightly; keep backend fixed across baseline/steered runs"
+  - topic: training setup (informational)
+    paper: "App. A.11.2: batch 256 across 4 FSDP devices"
+    code: "pi05_libero config: batch_size=256, fsdp_devices=1"
+    difference: "FSDP device count"
+    possible_consequence: "none for inference with the released checkpoint"
+
+notes:
+  - "3/3 success on init states 0-2 is NOT a scientific result; the paper reports 20-60% baseline SR across LIBERO-10 for this checkpoint, and 3 episodes are far too few to estimate that."
+  - "Init states 0-2 fall inside the pipeline's collection window (seed 0); do not reuse this run as held-out evaluation data."
+  - "One server traceback ('Prompt is required') appears in server.log after the rollout. It came from a deliberate post-run probe sending a request without a prompt."
+  - "Stop condition respected: no activation collection, conceptors, steering, sweeps, full-suite eval, or training was run."

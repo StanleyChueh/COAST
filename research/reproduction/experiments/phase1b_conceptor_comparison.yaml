@@ -1,0 +1,157 @@
+# Phase 1B: offline repository-faithful vs paper-faithful COAST conceptor comparison.
+# No rollouts, recollection, steering, or sweeps. src/openpi/serving/conceptors.py unmodified.
+# Human-readable report: research/reproduction/phase1b_conceptor_comparison.md
+
+experiment_id: phase1b_conceptor_comparison_task02
+timestamp: "2026-09-23T16:00:37+08:00"  # official builder start; comparison script re-run finished ~16:30
+paper: "Contrastive Conceptor Activation Steering (COAST): Unlocking Vision-Language-Action Models through Hidden States"
+arxiv_id: "2605.17144"
+code_commit: 171cc4e4c59e9ac20345e7df34b50d458df4acef
+branch: repro/arxiv-2605-17144
+
+source_activations: activations/libero/openpi-libero-2000/KITCHEN_SCENE3_turn_on_the_stove_and_put_the_moka_pot_on_it
+task_suite: libero_10
+task_id: 2
+task_name: KITCHEN_SCENE3_turn_on_the_stove_and_put_the_moka_pot_on_it
+episodes: {total: 15, success: 8, failure: 7}
+inference_calls: {success: 385, failure: 728}
+layers: [5, 11]
+global_alphas: [0.1, 0.5, 1.0, 2.0, 10.0]
+per_step: {indices: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], alpha: 1.0}  # repository fixes per-step alpha = 1.0
+
+repository_faithful:
+  command: >-
+    CUDA_VISIBLE_DEVICES="" JAX_PLATFORMS=cpu uv run python experiments/libero/compute_conceptors.py
+    --activation-root activations/libero --output-path conceptors/phase1b_repo_task02.npz
+    --layers 5 11 --alphas 0.1 0.5 1.0 2.0 10.0 --per-step-indices 0 1 2 3 4 5 6 7 8 9
+    --collect-layers 0 5 11 17 --min-episodes-per-class 2
+    --task-filter KITCHEN_SCENE3_turn_on_the_stove_and_put_the_moka_pot_on_it
+  status: success
+  keys_written: 92  # 2 layers x (5 alpha x 3 + 10 per-step x 3 + linear_direction)
+  runtime_s: 11.2
+  peak_rss_gb: 4.29
+  formulas:
+    samples: "token-flattened: one row per (inference call, denoise step, token)"
+    R: "X^T X / N (uncentered)"
+    C: "R (R + alpha^-2 I)^-1 via solve, cast float32"
+    NOT: "I - C"
+    AND: "A @ inv(A + B - A @ B) @ B"
+    contrastive: "AND(C_s, NOT(C_f)), float32"
+    min_episodes_per_class: 2
+
+paper_faithful:
+  script: research/reproduction/tools/compare_conceptor_builders.py
+  command: 'CUDA_VISIBLE_DEVICES="" JAX_PLATFORMS=cpu uv run python research/reproduction/tools/compare_conceptor_builders.py'
+  status: success (global well-posed; per-step ill-posed, see numerics)
+  formulas:
+    samples: "mean-pool 10 action tokens -> one row per (inference call, denoise step); per-step keeps step t only"
+    R: "class-specific centering: (X - mean)^T (X - mean) / N, float64"
+    C: "U diag(lam/(lam+alpha^-2)) U^T from eigh(R) (== R (R+alpha^-2 I)^-1; max |diff| vs repo solve <= 1.1e-11)"
+    NOT: "I - C"
+    AND: "pinv(pinv(A) + pinv(B) - I)  (Eq. 3/7, numpy pinv defaults rcond=1e-15, hermitian=False)"
+    storage: float32
+  paper_min_class_threshold: 3  # not binding here (8/7)
+
+variants:
+  V0: "token flattening + uncentered + repository AND  (== repository-faithful; reproduces official NPZ, max|diff| = 0.0)"
+  V1: "token pooling + uncentered + repository AND"
+  V2: "token pooling + centered + repository AND"
+  V3: "token pooling + centered + canonical pinv AND  (== paper-faithful)"
+
+sample_counts:
+  global_per_layer: {flattened: {success: 38500, failure: 72800}, pooled: {success: 3850, failure: 7280}}
+  per_step_per_layer_step: {flattened: {success: 3850, failure: 7280}, pooled: {success: 385, failure: 728}}
+  pooled_per_step_R_rank: {success: 384, failure: 727}  # < d = 1024
+
+centering_stats_pooled:
+  L5_global: {mean_norm: [76.0, 75.7], mean_row_norm: [95.5, 95.2], mean_share_of_uncentered_trace: [0.62, 0.62]}
+  L11_global: {mean_norm: [127.7, 126.1], mean_row_norm: [143.6, 141.9], mean_share_of_uncentered_trace: [0.78, 0.78]}
+  success_minus_failure_mean_norm: {L5: 4.4, L11: 7.9}
+
+rel_frobenius_C_contrastive:  # ranges over alphas (global) or steps (per-step)
+  L5_global:   {V0_to_V1: [0.656, 1.231], V1_to_V2: [0.060, 0.218], V2_to_V3: [0.027, 0.211], V0_vs_V3: [0.657, 0.995]}
+  L5_per_step: {V0_to_V1: [0.705, 0.843], V1_to_V2: [0.101, 0.243], V2_to_V3: [0.194, 0.299], V0_vs_V3: [1.304, 1.731]}
+  L11_global:  {V0_to_V1: [0.526, 0.792], V1_to_V2: [0.037, 0.106], V2_to_V3: [0.059, 0.225], V0_vs_V3: [0.582, 0.727]}
+  L11_per_step: {V0_to_V1: [0.555, 0.679], V1_to_V2: [0.077, 0.092], V2_to_V3: [0.295, 0.405], V0_vs_V3: [0.802, 0.970]}
+rel_frobenius_C_success_failure:
+  L5_global: {V0_to_V1: [0.280, 0.530], V1_to_V2: [0.045, 0.266], V2_to_V3: 0.0}
+  L11_global: {V0_to_V1: [0.289, 0.560], V1_to_V2: [0.017, 0.265], V2_to_V3: 0.0}
+
+top10_eigenspace_alignment_C_contrastive_V0_vs_V3:  # mean cos^2 principal angles
+  L5_global: {a0.1: 0.153, a0.5: 0.413, a1.0: 0.406, a2.0: 0.388, a10.0: 0.359}
+  L11_global: {a0.1: 0.202, a0.5: 0.598, a1.0: 0.673, a2.0: 0.634, a10.0: 0.073}
+
+quota_C_contrastive:
+  L5:  {a0.5: {V0: 0.0185, V3: 0.0103}, a1.0: {V0: 0.0364, V3: 0.0183}, a10.0: {V0: 0.1681, V3: 0.0952}}
+  L11: {a0.5: {V0: 0.0488, V3: 0.0324}, a1.0: {V0: 0.0930, V3: 0.0571}, a10.0: {V0: 0.1404, V3: 0.1554}}
+effective_rank_C_contrastive:  # exp(entropy of normalized singular values)
+  L5:  {a0.5: {V0: 180, V3: 114}, a1.0: {V0: 281, V3: 156}, a10.0: {V0: 793, V3: 531}}
+  L11: {a0.5: {V0: 403, V3: 276}, a1.0: {V0: 587, V3: 397}, a10.0: {V0: 698, V3: 725}}
+overlap_eq11_L11:  # tr(CsCf)/sqrt(tr Cs^2 tr Cf^2)
+  alphas: [0.1, 0.5, 1.0, 2.0, 10.0]
+  V0: [0.994, 0.971, 0.960, 0.959, 0.993]
+  V3: [0.962, 0.961, 0.940, 0.920, 0.937]
+  paper_table19_10task_mean: [0.955, 0.937, 0.882, 0.808, 0.670]
+paper_table18_quota_reference: {paper_10task_mean: {L5: 0.059, L11: 0.092}, V0: {L5: 0.168, L11: 0.140}, V3: {L5: 0.095, L11: 0.155}}
+
+symmetry_psd:
+  C_success_C_failure_all_variants: "symmetric (<=2.3e-10), eigenvalues within [0, 1]"
+  C_contrastive_repository_AND_V0: "sym_err 0.076-0.27; complex eigenvalues (max |imag| 1.1e-3); sym-part min eig -0.038"
+  C_contrastive_repository_AND_V1_V2: "sym_err 0.042-0.36; sym-part min eig -0.046"
+  C_contrastive_V3_global: "sym_err <= 2e-9 (float32 stored; float64 <= 7.5e-11); eigenvalues [9.7e-8, 0.502]; PSD"
+  C_contrastive_V3_per_step: "sym_err 0.05-0.39; sym-part min eig -0.335; NOT PSD (ill-posed)"
+
+numerical_tolerance:
+  compute_dtype: float64
+  storage_dtype: float32
+  pinv_default: {rcond: 1e-15, hermitian: false, numpy: 1.26.4}
+  sensitivity_rconds: [1e-15, 1e-12, 1e-10, 1e-8, 1e-6, 1e-4]
+  V3_global: "rcond<=1e-6 changes <= 9.4e-4 relFro; rcond=1e-4 <= 1.2%; hermitian=True <= 1e-10 -> tolerance-insensitive"
+  V3_per_step: "rcond=1e-12 changes up to 3.2e7x relFro; rcond=1e-4 0.09-97x; hermitian=True 12-32% -> tolerance-dominated, ill-posed (N_success=385 < d=1024)"
+  R_eigenvalue_clipping: "negative round-off eigenvalues clipped to 0 before forming C"
+
+offline_gate_diagnostic:  # h' = h @ M.T, M=(1-beta)I+beta*C_contrastive; in-sample; NOT behavioural
+  sample: "episode_002 (success) + episode_000 (failure); every 10th inference call x 10 denoise x 10 tokens = 1600 rows"
+  L5_a0.5_beta0.1_mean_rel_change: {V0: 0.0994, V1: 0.0960, V2: 0.0945, V3: 0.0945}
+  L11_a0.5_beta0.1_mean_rel_change: {V0: 0.0993, V1: 0.0959, V2: 0.0929, V3: 0.0930}
+  L11_a1.0_beta0.1_mean_rel_change: {V0: 0.0997, V1: 0.0985, V2: 0.0964, V3: 0.0964}
+  M_vs_MT_intervention_difference: "V0 0.7-1.4%, V1 1.8-3.4%, V2 2.0-4.4%, V3 0"
+  interpretation: "relative change ~= beta for all variants: the gate acts mostly as a (1-beta) shrink; variants differ in the small preserved component"
+
+largest_source_of_discrepancy: "D1 token flattening vs mean-pooling (V0->V1)"
+
+runtime:
+  official_builder_s: 11.2
+  comparison_script_s: 453  # re-run 449 s
+  comparison_breakdown_s: {load: 0.9, build: 185.7, diagnostics: 264.0, gate: 2.0}
+memory:
+  official_builder_peak_rss_gb: 4.29
+  comparison_script_peak_rss_gb: 3.46
+hardware: "CPU only (i7-13700); no GPU used"
+
+tests:
+  command: 'CUDA_VISIBLE_DEVICES="" JAX_PLATFORMS=cpu uv run pytest tests/test_conceptors.py tests/test_steering.py -m "not manual"'
+  result: "118 passed"
+  note: "a first run without JAX_PLATFORMS=cpu had 1 env-only failure (JAX CUDA init with the GPU hidden). All boolean_and unit tests use commuting operands, so they cannot detect D3."
+reproducibility: "lint-clean script re-run: paper NPZ and metrics CSV byte-identical; results JSON identical except timings"
+
+outputs_tracked_candidates:
+  - research/reproduction/phase1b_conceptor_comparison.md
+  - research/reproduction/experiments/phase1b_conceptor_comparison.yaml
+  - research/reproduction/experiments/phase1b_conceptor_metrics.csv
+  - research/reproduction/tools/compare_conceptor_builders.py
+outputs_gitignored:
+  - conceptors/phase1b_repo_task02.npz        # repository-faithful (V0), 92 keys, 378 MB
+  - conceptors/phase1b_repo_task02.meta.json
+  - conceptors/phase1b_paper_task02.npz       # paper-faithful (V3), same key format, 90 keys, 378 MB
+  - conceptors/phase1b_variant_V1_task02.npz  # 378 MB
+  - conceptors/phase1b_variant_V2_task02.npz  # 378 MB
+  - conceptors/phase1b_results.json           # full metrics (351 KB)
+
+paper_vs_code_conclusions:
+  - "Repository-faithful and paper-faithful C_contrastive are materially different: 58-100% relFro (global), top-10 eigenspace alignment 0.07-0.67."
+  - "D1 pooling dominates; D2 centering mostly cancels in C_contrastive; D3 AND is a smaller magnitude change but determines symmetry/PSD."
+  - "Repository-AND C_contrastive is non-symmetric; the runtime hook uses h @ M.T without symmetrization."
+  - "Paper-faithful global conceptors are well-posed; paper-faithful per-step conceptors are ill-posed with 15 episodes after pooling (N < d). This must be resolved before per-step steering."
+  - "Single-task diagnostics are closer to paper Tables 18/19 trends for V3 than for V0 (quota layer ordering; small-alpha overlaps), but one task is not conclusive."
+  - "Phase 1A D6 corrected: paper threshold 3 vs repository default min_episodes_per_class=2."

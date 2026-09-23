@@ -94,9 +94,10 @@ The discrepancies are in how the repo's **downstream builder** (`src/openpi/serv
 
 ### D6. Minimum class size
 - PAPER SPECIFICATION: tasks with fewer than 3 successes or 3 failures are excluded from contrastive construction (A.8.3).
-- CURRENT REPOSITORY IMPLEMENTATION: the builder only skips a layer when a class is **empty**.
-- DIFFERENCE: 1–2 episodes of a class would still produce a conceptor.
-- POSSIBLE CONSEQUENCE: noisy conceptors on near-saturated tasks. Not triggered here (8/7).
+- CURRENT REPOSITORY IMPLEMENTATION: `experiments/libero/compute_conceptors.py` defaults to `min_episodes_per_class = 2`, and `compute_all_conceptors()` skips a task when either class has fewer episodes than that threshold. (There is also an inner per-layer guard that skips an empty class; the task-level threshold is the one that matters.)
+- DIFFERENCE: paper threshold 3 vs repository default 2. A task with exactly 2 successes or 2 failures is included by the repository but excluded by the paper.
+- POSSIBLE CONSEQUENCE: noisier conceptors on near-saturated tasks. Not triggered here (8/7).
+- *Correction (Phase 1B review):* an earlier version of this entry wrongly said the repository skips only an empty class.
 
 ### D7. Class sample imbalance (not a stated paper protocol; recorded for Phase 1B)
 All failures here are 520-step timeouts, so failures contribute 728 inference steps vs 385 for successes (1.9×). They also include long stretches after the policy has stalled. Neither the paper nor the code reweights by episode, so later failure steps weigh more in C_failure.

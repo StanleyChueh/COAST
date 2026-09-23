@@ -138,8 +138,10 @@ paper_vs_code_differences:
     consequence: "Terminology only."
   - id: D6_min_class_size
     paper: "Tasks with <3 successes or <3 failures are excluded (A.8.3)."
-    code: "Builder skips only when a class is empty."
-    consequence: "Possible noisy conceptors on near-saturated tasks; not triggered here (8/7)."
+    code: "compute_conceptors.py defaults min_episodes_per_class=2; compute_all_conceptors() skips a task when either class has fewer episodes than that threshold."
+    difference: "paper threshold 3 vs repository default threshold 2"
+    consequence: "Tasks with exactly 2 episodes of a class are kept by the repository but excluded by the paper; not triggered here (8/7)."
+    correction: "Corrected in Phase 1B review; the earlier text wrongly said the builder skips only an empty class."
   - id: D7_class_sample_imbalance
     paper: "Not specified."
     code: "No per-episode weighting; failure timeouts contribute 728 vs 385 success inference steps."

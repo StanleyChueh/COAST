@@ -662,19 +662,27 @@ class SteeredPolicyWrapper:
             logger.info("Built pi0-fast steering stack %s (cache size=%d)", key, len(self._fast_cache))
         return steering_inputs
 
-    def infer(self, obs: dict) -> dict:
+    def infer(self, obs: dict, *, noise: np.ndarray | None = None) -> dict:
         # Use .get() (not .pop()) so we don't mutate the caller's obs dict —
         # matches the CollectingPolicy.infer() contract in activation_collector.py.
         # Strip __steering__ via a shallow dict comprehension before passing
         # downstream so the underlying policy's transforms don't see the magic key.
+        #
+        # ``noise`` (explicit initial flow noise, see openpi.serving.noise_control)
+        # is forwarded to whichever path runs, so steered and unsteered calls can
+        # share one noise tensor. It is only passed when set, so the no-noise call
+        # into the underlying policy is unchanged.
+        noise_kwargs = {} if noise is None else {"noise": noise}
         if not isinstance(obs, dict):
-            return self._policy.infer(obs)
+            return self._policy.infer(obs, **noise_kwargs)
         payload = obs.get(_STEERING_KEY)
         if payload is None:
-            return self._policy.infer(obs)
+            return self._policy.infer(obs, **noise_kwargs)
         validate_steering_payload(payload, self._available_tasks)
         clean_obs = {k: v for k, v in obs.items() if k != _STEERING_KEY}
         if self._is_fast:
+            if noise is not None:
+                raise NotImplementedError("Explicit flow noise is not supported for pi0-fast steering")
             c_stack, beta, step_to_c_idx = self._get_or_build_fast(payload)
             return self._policy.infer_with_steering_fast(
                 clean_obs,
@@ -683,7 +691,7 @@ class SteeredPolicyWrapper:
                 step_to_c_idx=step_to_c_idx,
             )
         layer, hook = self._get_or_build_hook(payload)
-        result, _ = self._policy.infer_with_steering(clean_obs, steering_hooks=[(layer, hook)])
+        result, _ = self._policy.infer_with_steering(clean_obs, steering_hooks=[(layer, hook)], **noise_kwargs)
         return result
 
     def reset(self) -> None:

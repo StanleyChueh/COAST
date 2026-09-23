@@ -18,6 +18,8 @@ from openpi.policies import policy as _policy
 from openpi.policies import policy_config as _policy_config
 from openpi.serving import websocket_policy_server
 from openpi.serving.activation_collector import CollectingPolicy
+from openpi.serving.noise_control import NoiseControlledPolicyWrapper
+from openpi.serving.noise_control import noise_shape_from_policy
 from openpi.serving.steering import SteeredPolicyWrapper
 from openpi.training import config as _config
 
@@ -91,6 +93,13 @@ class Args:
     # Download the appropriate {env}-conceptors dataset, or rebuild via
     # experiments/{libero,robocasa,metaworld,droid}/compute_conceptors.py.
     conceptor_npz: str | None = None
+
+    # Research control: honor obs["__noise_control__"] = {master_seed, task_id, init_state,
+    # rollout_step} by deriving the initial flow noise deterministically from that key and
+    # passing it explicitly to the sampler, so different conditions (e.g. baseline vs steered)
+    # share one noise schedule. Requests without the key are unaffected. pi0/pi0.5 only.
+    # See src/openpi/serving/noise_control.py.
+    noise_control: bool = False
 
     # Specifies how to load the policy. If not provided, the default policy for the environment will be used.
     policy: Checkpoint | Default = dataclasses.field(default_factory=Default)
@@ -217,7 +226,20 @@ def main(args: Args) -> None:
                 "(sample_actions_with_steering uses PyTorch hooks for diffusion models)."
             )
 
+    if args.noise_control:
+        if args.collect_activations:
+            raise ValueError("--noise_control and --collect_activations are mutually exclusive.")
+        if resolve_policy_model_type(args) == _model.ModelType.PI0_FAST:
+            raise ValueError("--noise_control requires a flow-matching model (pi0/pi0.5); pi0-fast has no flow noise.")
+
     policy = create_policy(args)
+    # Read before wrapping: the noise shape comes from the loaded model, cross-checked against the train config.
+    noise_shape = noise_shape_from_policy(policy) if args.noise_control else None
+    if noise_shape is not None:
+        model_config = _config.get_config(resolve_policy_config_name(args)).model
+        expected_shape = (model_config.action_horizon, model_config.action_dim)
+        if noise_shape != expected_shape:
+            raise ValueError(f"Loaded model noise shape {noise_shape} != train config shape {expected_shape}")
 
     if args.collect_activations:
         assert isinstance(args.policy, Checkpoint)  # narrowed above
@@ -243,6 +265,11 @@ def main(args: Args) -> None:
         device = str(getattr(policy, "_pytorch_device", None) or "cpu")
         logging.info("Steering enabled: loading conceptor NPZ from %s (device=%s)", args.conceptor_npz, device)
         policy = SteeredPolicyWrapper(policy, conceptor_npz_path=args.conceptor_npz, device=device)
+
+    if noise_shape is not None:
+        # Outermost wrapper, so __noise_control__ is removed before steering / input transforms see the obs.
+        logging.info("Noise control enabled: explicit flow noise of shape %s derived from obs key", noise_shape)
+        policy = NoiseControlledPolicyWrapper(policy, action_horizon=noise_shape[0], action_dim=noise_shape[1])
 
     policy_metadata = policy.metadata
 

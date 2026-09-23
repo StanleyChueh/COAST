@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import collections
 import dataclasses
+import json
 import logging
 import math
 import os
@@ -30,6 +31,11 @@ from libero.libero.envs import OffScreenRenderEnv
 from openpi_client import image_tools
 from openpi_client import websocket_client_policy as _websocket_client_policy
 from openpi_client.collection_session import CollectionSession
+from openpi_client.noise_control import (
+    NOISE_CONTROL_ECHO_KEY,
+    NOISE_CONTROL_KEY,
+    build_noise_control_payload,
+)
 from openpi_client.steering import STEERING_KEY, build_steering_payload
 from tqdm import tqdm
 
@@ -139,6 +145,15 @@ class Args:
     steering_strategy: str = "global"
     # Override the conceptor task key (default: the current LIBERO task name).
     steering_task: Optional[str] = None
+
+    # ── Controlled policy noise (requires server started with --noise_control). ──
+    # When set, attach obs[NOISE_CONTROL_KEY] = {master_seed, task_id, init_state,
+    # rollout_step} to every inference call; the server derives the initial flow
+    # noise from that key. Runs sharing this seed (e.g. baseline vs steered) get
+    # identical noise whenever they query the policy at the same (task_id,
+    # init_state, rollout_step). Per-request noise fingerprints echoed by the
+    # server are checked and written to <task_output_dir>/noise_fingerprints.jsonl.
+    policy_noise_seed: Optional[int] = None
 
 
 def tile_frames(frames: List[np.ndarray]) -> np.ndarray:
@@ -258,6 +273,25 @@ def render_frame(obs: Dict[str, np.ndarray], render_cameras: List[str]) -> np.nd
     return tile_frames(frames)
 
 
+def check_noise_echo(result: Dict, payload: Dict[str, int]) -> Dict:
+    """Return the server's noise-control echo, failing if it doesn't match the request."""
+    echo = result.get(NOISE_CONTROL_ECHO_KEY)
+    if not isinstance(echo, dict) or "sha256" not in echo:
+        raise RuntimeError(
+            "Server response has no {!r} echo; is the server running with --noise_control?".format(
+                NOISE_CONTROL_ECHO_KEY
+            )
+        )
+    for field, value in payload.items():
+        if echo.get(field) != value:
+            raise RuntimeError(
+                "Noise-control echo mismatch for {}: sent {}, got {}".format(
+                    field, value, echo.get(field)
+                )
+            )
+    return echo
+
+
 def eval_task(
     task_suite_name: str,
     task_id: int,
@@ -294,6 +328,9 @@ def eval_task(
 
     env = make_env(task, LIBERO_ENV_RESOLUTION, args.seed)
     successes = []
+    noise_log = None
+    if args.policy_noise_seed is not None:
+        noise_log = open(os.path.join(task_output_dir, "noise_fingerprints.jsonl"), "w")
 
     # --seed acts as an offset into LIBERO's canonical initial-state list so
     # different seeds evaluate on disjoint start conditions. Pick seeds ≥
@@ -355,9 +392,23 @@ def eval_task(
                                 beta=args.steering_beta,
                                 strategy=args.steering_strategy,
                             )
-                        action_chunk = np.asarray(
-                            policy.infer(element)["actions"], dtype=np.float32
-                        )
+                        if noise_log is not None:
+                            element[NOISE_CONTROL_KEY] = build_noise_control_payload(
+                                master_seed=args.policy_noise_seed,
+                                task_id=task_id,
+                                init_state=state_idx,
+                                rollout_step=rollout_step,
+                            )
+                        result = policy.infer(element)
+                        if noise_log is not None:
+                            echo = check_noise_echo(result, element[NOISE_CONTROL_KEY])
+                            record = dict(
+                                element[NOISE_CONTROL_KEY],
+                                episode=episode,
+                                sha256=echo["sha256"],
+                            )
+                            noise_log.write(json.dumps(record, sort_keys=True) + "\n")
+                        action_chunk = np.asarray(result["actions"], dtype=np.float32)
                         if action_chunk.ndim != 2:
                             raise ValueError(
                                 "Model output must have shape (action_horizon, action_dim), got {}".format(
@@ -398,6 +449,8 @@ def eval_task(
             )
     finally:
         env.close()
+        if noise_log is not None:
+            noise_log.close()
 
     return {
         "success_rate": float(np.mean(successes)) if successes else 0.0,
@@ -430,7 +483,14 @@ def main(args: Args) -> None:
     np.random.seed(args.seed)
 
     policy = _websocket_client_policy.WebsocketClientPolicy(args.host, args.port)
-    logger.info("Server metadata: %s", policy.get_server_metadata())
+    server_metadata = policy.get_server_metadata()
+    logger.info("Server metadata: %s", server_metadata)
+    if args.policy_noise_seed is not None and not server_metadata.get(
+        "noise_control_enabled"
+    ):
+        raise ValueError(
+            "--policy_noise_seed requires a server started with --noise_control"
+        )
 
     if args.output_dir is not None:
         output_dir = args.output_dir

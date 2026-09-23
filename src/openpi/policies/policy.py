@@ -344,7 +344,9 @@ class Policy(BasePolicy):
         outputs["policy_timing"] = {"infer_ms": model_time * 1000}
         return outputs, intermediates
 
-    def infer_with_steering(self, obs: dict, *, steering_hooks=None) -> tuple[dict, dict]:
+    def infer_with_steering(
+        self, obs: dict, *, steering_hooks=None, noise: np.ndarray | None = None
+    ) -> tuple[dict, dict]:
         """Like infer() but applies steering hooks during denoising. PyTorch only.
 
         Handles both single-example (state ndim=1) and batched (state ndim=2)
@@ -353,6 +355,8 @@ class Policy(BasePolicy):
         Args:
             obs: Observation dict (single or batched).
             steering_hooks: list of (layer_idx, hook_callable) pairs.
+            noise: Optional explicit initial flow noise, handled exactly as in ``infer()``.
+                If None, the sampler draws its own noise (previous behavior).
 
         Returns:
             (outputs_dict, diagnostics_dict)
@@ -378,19 +382,27 @@ class Policy(BasePolicy):
             inputs = collate_transformed_singles(singles)
             inputs = jax.tree.map(lambda x: torch.from_numpy(np.array(x)).to(self._pytorch_device), inputs)
 
-        observation = _model.Observation.from_dict(inputs)
-        start_time = time.monotonic()
         # Forward the policy's sample_kwargs (e.g., custom num_steps) so steered
         # and unsteered runs use the same sampler configuration. Without this,
         # a policy created via `create_trained_policy(sample_kwargs={"num_steps": 20})`
         # would silently run the default `num_steps=10` under --steer and
         # baseline vs steered SR could diverge for sampling reasons unrelated
         # to the steering hook.
+        sample_kwargs = dict(self._sample_kwargs)
+        if noise is not None:
+            # Same conversion as infer() so steered and unsteered calls receive identical noise tensors.
+            noise = torch.from_numpy(noise).to(self._pytorch_device)
+            if noise.ndim == 2:  # If noise is (action_horizon, action_dim), add batch dimension
+                noise = noise[None, ...]  # Make it (1, action_horizon, action_dim)
+            sample_kwargs["noise"] = noise
+
+        observation = _model.Observation.from_dict(inputs)
+        start_time = time.monotonic()
         actions, diagnostics = self._model.sample_actions_with_steering(
             self._pytorch_device,
             observation,
             steering_hooks=steering_hooks,
-            **self._sample_kwargs,
+            **sample_kwargs,
         )
         model_time = time.monotonic() - start_time
 

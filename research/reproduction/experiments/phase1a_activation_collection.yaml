@@ -1,0 +1,146 @@
+# Phase 1A: single-task pi0.5 LIBERO activation-collection validation.
+# Raw activations only; no conceptors, steering, or sweeps were computed.
+# See research/reproduction/phase1a_activation_collection_notes.md for details.
+
+experiment_id: phase1a_collect_pi05_libero10_task02_seed0_15ep
+timestamp: "2026-09-23T15:39:08+08:00"  # client start; client end 2026-09-23T15:42:38+08:00
+paper: "Contrastive Conceptor Activation Steering (COAST): Unlocking Vision-Language-Action Models through Hidden States"
+arxiv_id: "2605.17144"
+code_commit: 99b395199bbebc231082c6d3c136dd1655c1da7f
+branch: repro/arxiv-2605-17144
+
+model: pi0.5
+backend: pytorch
+policy_config: pi05_libero
+checkpoint: brandonyang/openpi-libero-2000 @ aaeeabc72f8a50a8fa2d04544332c8ec1cd0142e
+checkpoint_path: checkpoints/openpi-libero-2000
+
+task_suite: libero_10
+task_id: 2
+task_name: KITCHEN_SCENE3_turn_on_the_stove_and_put_the_moka_pot_on_it
+task_language: "turn on the stove and put the moka pot on it"
+task_selection_reason: >-
+  Closest-to-50% baseline at checkpoint 2000 in both available sources:
+  repo examples/libero_env/figures/results_2000_3000_9000.json = 0.47 (7/15), and
+  paper Table 1 pi0.5 Base "Stove+Moka" = 0.53. No probe rollouts were needed.
+seed: 0  # official collection convention (run_end_to_end.sh SEED_COLLECT=0)
+init_state_indices: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+num_episodes: 15
+successes: 8
+failures: 7
+success_rate: 0.533
+success_episode_ids: [2, 3, 7, 8, 9, 10, 12, 13]
+failure_episode_ids: [0, 1, 4, 5, 6, 11, 14]  # all are 520-step timeouts
+class_imbalance_stop_triggered: false
+
+physical_gpu_id: 0
+CUDA_VISIBLE_DEVICES: "0"
+
+collection_server_command: >-
+  CUDA_VISIBLE_DEVICES=0 uv run --no-sync scripts/serve_policy.py --pytorch --collect-activations
+  --output-dir activations/libero --port 8100 policy:checkpoint --policy.config pi05_libero
+  --policy.dir checkpoints/openpi-libero-2000
+collection_server_cwd: /home/stanley/Stanley_ws/COAST-research/COAST
+client_command: >-
+  CUDA_VISIBLE_DEVICES=0 MUJOCO_GL=egl
+  LIBERO_CONFIG_PATH=/home/stanley/Stanley_ws/COAST-research/libero_config_coast
+  uv run --no-sync python main.py --task_suite_name libero_10 --task_id 2 --num_episodes 15
+  --seed 0 --collect --port 8100 --output_dir output/phase1a_collect_task02
+client_cwd: /home/stanley/Stanley_ws/COAST-research/COAST/examples/libero_env
+
+activation_root: activations/libero/openpi-libero-2000/KITCHEN_SCENE3_turn_on_the_stove_and_put_the_moka_pot_on_it
+activation_schema: v1  # server metadata collection_mode="v1", model_type="pi05"
+collected_layers: [0, 5, 11, 17]  # action-expert (gemma_300m, 18 layers) decoder-layer outputs; axis-1 slots 0..3
+denoising_steps: 10
+action_tokens: 10  # pi0.5 suffix = action_horizon action tokens only (no state token)
+hidden_dim: 1024
+mlp_hidden_dim: 4096
+inference_steps_total: 1113  # success episodes 385, failure episodes 728
+inference_stride_env_steps: 5  # one step_NNNN dir per inference call (replan_steps=5), not per env step
+
+tensor_keys:
+  denoising.npz: [all_x_t, all_v_t]
+  adarms_cond.npz: [all_adarms_cond]
+  suffix_residual.npz: [all_suffix_residual]
+  suffix_mlp_hidden.npz: [all_suffix_mlp_hidden]
+  rewards.npz (per episode): [per_step_reward, cumulative_reward, success_at_step]
+tensor_shapes:
+  all_x_t: [10, 10, 32]            # (denoise_step, action_horizon, padded_action_dim)
+  all_v_t: [10, 10, 32]
+  all_adarms_cond: [10, 1024]      # (denoise_step, hidden)
+  all_suffix_residual: [10, 4, 10, 1024]   # (denoise_step, layer_slot, token, hidden)
+  all_suffix_mlp_hidden: [10, 4, 10, 4096] # (denoise_step, layer_slot, token, mlp_hidden)
+dtype: float32  # captured in bf16 and upcast (low 16 mantissa bits verified zero)
+shapes_identical_across_all_1113_steps: true
+nan_inf_result: "0 non-finite values across all 4 x 1113 per-step NPZ files"
+official_verification: "tests/test_activations.py with ACTIVATIONS_DIR=<activation_root>: 23 passed"
+npz_file_count: 4467  # 4 x 1113 + 15 rewards.npz
+disk_usage_bytes: 9198361060
+disk_usage_human: 8.6 GiB  # ~8.26 MB per inference step
+stored_representation:
+  token_level: true         # not mean-pooled at collection
+  centered: false           # raw activations; no mean subtraction at collection
+  denoising_steps_stored: all (0-9)
+
+runtime:
+  server_startup_s: ~45     # PyTorch weights already converted in Phase 0
+  client_wall_clock: 3m29.8s  # 15 episodes, collection mode
+vram:
+  gpu0_before_mib: 18
+  server_loaded_idle_mib: 7579
+  peak_during_collection_mib: 22821  # JAX/XLA preallocation triggered by jnp.stack in collate_transformed_singles
+  peak_gpu_util_pct: 70
+  source: examples/libero_env/output/phase1a_collect_task02/gpu0_vram.csv
+
+logs:
+  server_log: examples/libero_env/output/phase1a_collect_task02/server.log
+  client_log: examples/libero_env/output/phase1a_collect_task02/client.log
+  videos_dir: examples/libero_env/output/phase1a_collect_task02/02-kitchen-scene3-turn-on-the-stove-and-put-the-moka-pot-on-it/
+
+package_versions:
+  root_python: 3.11.16
+  torch: 2.7.1+cu126
+  jax: 0.5.3
+  transformers: 4.53.2 (+ openpi transformers_replace patch)
+  libero_python: 3.8.20
+  mujoco: 3.2.3
+  robosuite: 1.4.0
+  uv: 0.12.18
+
+notes:
+  - "Validation only. The 8/15 success rate is a byproduct of collection, not an evaluation result."
+  - "Init states 0-14 form the official collection window; future sweeps/evals must use disjoint windows (e.g. seed 15 / seed 30)."
+  - "Failures are all timeouts, so the failure class contributes 1.9x more inference steps than the success class."
+  - "The activation collector and COAST algorithm were not modified. No conceptors, R matrices, steering, or sweeps were computed."
+  - "boolean_and was checked only on synthetic random matrices (no collected data used) to confirm D3 below."
+  - "Activation NPZs live under activations/ (gitignored); client videos/logs under examples/libero_env/output/ (gitignored)."
+
+paper_vs_code_differences:
+  - id: D1_token_pooling
+    paper: "Mean-pool across action tokens: one vector per denoising step (Sec. 3.2, A.9.1)."
+    code: "Collection stores token-level states. conceptors.py flatten_global/flatten_per_step use every token as a separate row (no pooling)."
+    consequence: "10x more rows; covariance includes between-token variance; different conceptor subspaces."
+  - id: D2_centering
+    paper: "Mean-center X before R (Eq. 1, A.9.1)."
+    code: "conceptors.correlation_matrix computes the uncentered R = X^T X / N. Collection stores raw uncentered activations (L11 ||mean|| ~133 vs mean row norm ~203)."
+    consequence: "A dominant shared-mean rank-1 term in R_success and R_failure changes the conceptor spectra and AND-NOT results."
+  - id: D3_boolean_and
+    paper: "C_s AND NOT C_f = (C_s^-1 + (I - C_f)^-1 - I)^-1 via pinv; symmetric PSD."
+    code: "boolean_and(A,B) = A @ inv(A + B - A@B) @ B. It equals canonical only if A and B commute (canonical = A @ inv(A + B - B@A) @ B)."
+    consequence: "Synthetic check: 13.7% relative difference and a non-symmetric result for non-commuting conceptors, so the steering operator differs from the paper's."
+  - id: D4_suffix_tokens
+    paper: "Suffix tokens = proprioceptive state + noised action chunk (A.7.1)."
+    code: "pi0.5 suffix = 10 action tokens only; state token only for pi0."
+    consequence: "S = 10; affects token-index interpretation only."
+  - id: D5_mlp_terminology
+    paper: "MLP hidden = post-GELU activation (A.7.1)."
+    code: "Input to down_proj = gelu_tanh(gate_proj(x)) * up_proj(x) (GeGLU)."
+    consequence: "Terminology only."
+  - id: D6_min_class_size
+    paper: "Tasks with <3 successes or <3 failures are excluded (A.8.3)."
+    code: "Builder skips only when a class is empty."
+    consequence: "Possible noisy conceptors on near-saturated tasks; not triggered here (8/7)."
+  - id: D7_class_sample_imbalance
+    paper: "Not specified."
+    code: "No per-episode weighting; failure timeouts contribute 728 vs 385 success inference steps."
+    consequence: "C_failure is weighted toward long stalled failure trajectories."

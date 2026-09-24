@@ -1,0 +1,200 @@
+# Phase 4B: paper / released-code / reproduction protocol audit (documentation only; no experiments run).
+# Human-readable report: research/reproduction/phase4b_paper_protocol_audit.md
+# Evidence tags: P = paper, R = repository, O = our records, W = public web artifact, I = auditor inference.
+experiment_id: phase4b_paper_protocol_audit
+status: complete
+date: 2026-09-24
+constraints_followed: [no LIBERO rollouts, no code changes, no steering changes, no activation collection, no tuning, no commit]
+
+sources:
+  paper:
+    id: arXiv:2605.17144
+    title: "Contrastive Conceptor Activation Steering (COAST): Unlocking Vision-Language-Action Models through Hidden States"
+    version: v1
+    submitted: 2026-05-16
+    read: full HTML text (main paper, Appendices A and B, checklist); figures not viewed
+  released_code:
+    repo: github.com/COAST-VLA/COAST
+    upstream_main_head: 2afa10ee256a3b3edfeb56500fea166a0837f119
+    upstream_main_pushed: 2026-06-02
+    is_base_of_our_work: true
+    local_additions_over_base: research instrumentation only (noise control, shrinkage strategy, diagnostics, one log line); global math and builder unmodified
+    other_upstream_branches_not_inspected: [miranda, miranda-groot, conceptor-experiments, dp-integration, metaworld-reorganization, copilot/steering-refactor-research]
+  our_tree:
+    branch: exp/paper-protocol-audit
+    head: 6e1afd2084d1bb55d178103c538d02f0c81cbbfa
+  web_artifacts_checked:
+    - {url: "huggingface.co/api/models/brandonyang/openpi-libero-2000", result: "public; sha aaeeabc72f8a; lastModified 2026-04-09"}
+    - {url: "huggingface.co/api/datasets/brandonyang/pi05-libero-activations-v1-2000-15env", result: "public; 64,086 files; lastModified 2026-04-09; 30 per-episode metadata.json read (KS3, KS4)"}
+    - {url: "huggingface.co/api/{models,datasets}/brandonyang/libero-conceptors", result: "HTTP 401 anonymous; existence unverified"}
+
+verdict:
+  summary: >-
+    Faithful reproduction of the model and steering configuration for one task (KS3), partial reproduction of the
+    data-collection protocol, different experiment from the paper's evaluation protocol. The paper's KS3 global
+    result (0.93 = 28/30) was not reproduced and the audit cannot yet say why.
+  faithful: [model, checkpoint name/step, KS3 oracle config (global L5 a0.5 b0.1), hook site and gate formula, activation schema, fit-set size/split/seed, fit class counts]
+  partial: [task coverage (1 of 10), N per condition, strategy coverage (global only), no per-task selection]
+  different: [test-set definition, unsteered-baseline definition (paired and noise-controlled here)]
+  headline_gap:
+    paper_ks3_global: "28/30 = 0.93 (Table 4)"
+    ours_coast_b01: {states_15_44: "20/30", states_45_49_plus_0_14: "12/20", states_0_49_pooled: "32/50", heldout_30_44_phase3a: "11/15"}
+    fisher_exact_p_vs_28_of_30: {"20/30": 0.0211, "12/20": 0.0088, "32/50": 0.0032, "11/15": 0.1575}
+    caveat: state sets differ from the paper's (unknown); reference values only
+
+findings:
+  - id: F1
+    title: Table 1 "Base" column equals the fit-set success rates of Table 21
+    evidence: [P]
+    detail: >-
+      pi0.5 LIBERO-10 Base (KS3 .53, KS4 .40, KS6 .13, KS8 .20, LR1 .80, LR2a .40, LR2b .60, LR5 .07, LR6 .53, ST1 .67)
+      equals Table 21 fit success/15 in 10 of 10 tasks (mean 0.43 = 65/150). pi0-FAST agrees on the five tasks read
+      (KS3 .80, KS4 .67, KS6 .47, KS8 .33, LR1 .67). Inference: Base is the 15 fit rollouts, not a paired test baseline.
+    status: inference, not stated in the paper
+    impact: reported deltas may compare steered 30-episode test success with unsteered 15-episode fit success
+    our_data: {baseline_fit_states_0_14: "8/15", baseline_states_15_44: "21/30", fisher_p: 0.331}
+  - id: F2
+    title: LIBERO --seed semantics changed after the authors' released dataset
+    evidence: [R, W]
+    detail: >-
+      PR48 (commit 1797c0c, 2026-04-23) made episode k use init state (seed+k)%50. Before it, main.py used
+      initial_states[episode] regardless of seed. The released activation dataset was last modified 2026-04-09.
+    impact: if any paper run predates PR48, 30 test episodes would have used states 0-29 and overlapped the 15 fit states
+    status: possibility; unknown which code version produced the paper's numbers
+  - id: F3
+    title: Selection protocol and split differ between paper and repository
+    evidence: [P, R]
+    detail: >-
+      Paper: 15 fit rollouts (conceptors and hyper-parameter selection) plus 30 test rollouts; 240-config grid
+      (layer {0,5,11,17} x alpha {0.1,0.5,1,2,10} x beta {0.1,0.3,0.5} x 4 strategies), per-task oracle chosen on fit rollouts.
+      Repo docs: three disjoint 15-episode windows (collect seed 0, sweep 15, eval 30), default sweep layer 11, alpha {0.1,0.5,1.0},
+      beta {0.1,0.3}; experiments/libero/best_configs.json is an empty placeholder although the README says tuned params are committed.
+  - id: F4
+    title: Conceptor construction differs between paper text and released builder
+    evidence: [P, R, O]
+    detail: >-
+      Paper: mean-pooled tokens, mean-centered, canonical pinv AND. Repo: every token a row (D1), uncentered (D2), non-canonical AND (D3),
+      min class 2 vs 3 (D6). Which builder produced the paper's numbers is unknown. Phase 1B: V0 vs V3 differ by 58-100% (relative Frobenius);
+      Phase 1D: V0 and V3 success vectors identical on 15/15 states (11/15 each vs baseline 13/15).
+  - id: F5
+    title: The (1-beta) contraction is a property of the paper's own gate, not only of the released builder
+    evidence: [P, O, I]
+    detail: >-
+      Eq. 5 applies a conceptor fitted on mean-centered activations to uncentered h. Phase 1B offline in-sample: V3 changes h by 9.45% at
+      beta 0.1 (V0 9.94%); quota at L5 alpha 0.5 is 0.0103 (V3) and 0.0185 (V0). The paper reports no pure-shrinkage control; its random
+      control (Table 10) was run only on GR00T-RoboCasa and pi0.5-MetaWorld, not LIBERO.
+  - id: F6
+    title: Only global steering was tested
+    evidence: [P, R, O]
+    detail: >-
+      Paper LIBERO headline is per-step (0.43 -> 0.80, +0.37); KS3 per-step config is L5 alpha 10 beta 0.3 (0.87). Repo per_step fixes alpha at 1.0
+      and cannot express it. Per-step covariance has N ~ 385-728 < d = 1024 (Phase 1B note).
+  - id: F7
+    title: Fit-set outcome counts match, per-episode outcomes do not
+    evidence: [P, W, O]
+    detail: >-
+      KS3 8 S / 7 F in paper Table 21, in the released dataset metadata, and in our Phase 1A collection; per-episode agreement with the released
+      dataset is 7/15 (chance level, unseeded policy noise). KS4 6/9 released vs 8/7 ours.
+  - id: F8
+    title: Phase 4A statement refined
+    detail: >-
+      Phase 4A said the baseline reproduces the paper's 0.53. Accurate form: our fit-state rate (8/15) reproduces Table 1/21; the paper's Base is
+      probably a fit-set rate and is not comparable to our test-state baselines (0.70 on states 15-44). Phase 4A itself is not rewritten.
+
+audit_questions:
+  q1_model_checkpoint:
+    verdict: matches on everything checkable; weight identity not hash-verifiable
+    items:
+      - {item: base model, paper: "pi0.5", repo: "pi05_libero PyTorch", ours: "pi0.5 PyTorch", match: true}
+      - {item: fine-tune config, paper: "AdamW clip 1.0; warmup 10000; peak lr 5e-5; decay 1e6 steps to 5e-5; batch 256; EMA 0.999; 30000 steps; horizon 10", repo: "same values in pi05_libero", ours: "logged in server output", match: true}
+      - {item: checkpoint, paper: "/openpi-libero-2000 (step 2000)", repo: "brandonyang/openpi-libero-2000", ours: "same, revision aaeeabc72f8a (current)", match: true}
+  q2_dataset:
+    verdict: same suite and task; split sizes and test-state definition differ or are unknown
+    items:
+      - {item: suite/tasks, paper: "LIBERO-10, 10 tasks", ours: "task 2 (+ task 3 pilot)", difference: coverage}
+      - {item: split, paper: "15 fit / 30 test", repo: "15/15/15 windows", ours: "fit 0-14; eval 15-29, 30-44, 45-49; 4A sets P (20) and S (30)", difference: N and windows}
+      - {item: LIBERO version, paper: not stated, repo: "robosuite 1.4.0 pinned", ours: "LIBERO d63b117, robosuite 1.4.0, MuJoCo 3.2.3", difference: unknown}
+      - {item: init states, paper: "built-in distribution, sequential episode seeds", repo: "(seed+k)%50 since PR48", ours: "(seed+k)%50", difference: unknown alignment}
+  q3_steering_configuration:
+    verdict: our settings match the paper's stated KS3 oracle; only 1 of 3 strategies covered
+    items:
+      - {item: layer, paper: 5, repo_default: 11, ours: 5, match: true}
+      - {item: alpha, paper: 0.5, repo_default: 0.1, ours: 0.5, match: true}
+      - {item: beta, paper: "0.1 (grid 0.1/0.3/0.5)", repo_default: 0.3, ours: "0.1 primary; 0.2 (off-grid) and 0.3 added", match: "0.1 yes; 0.2 off-grid"}
+      - {item: strategy, paper: "global 0.93 / per-step 0.87 / positive-only 0.80", ours: "global only", match: partial}
+  q4_activation_collection:
+    verdict: hidden state, hook, steps and schema match exactly; token pooling, centering and AND differ between paper and repo
+    schema: {paper: "(D,L,S,1024) L={0,5,11,17} fp32", ours: "all_suffix_residual (10,4,10,1024) fp32", exact_match: true}
+    differences: [D1 token pooling, D2 centering, D3 Boolean AND, D6 min class size]
+    performance_relevance: >-
+      D1 dominates (C differs 53-123%, quota -33-49%); D2 mainly affects C_s/C_f; D3 small. Behavioural effect so far nil on 15 states (Phase 1D).
+  q5_evaluation_protocol:
+    classification: {faithful: "model, checkpoint, KS3 config, hook, schema, fit set", partial: "task coverage, N, strategy", different: "test set and baseline definition; paired noise"}
+    paper: {test_episodes_per_task: 30, success: "final-step is_success", selection: "oracle on fit rollouts, 240 configs", controls_on_libero: none}
+    ours: {episodes_per_condition: "15, 20, 30", success: "first done", selection: "none (paper values)", noise: "paired, master seed 100", controls: "shrinkage, random_matched, beta 0.2/0.3"}
+
+difference_table:
+  - {component: model, paper: "pi0.5", github: "pi0.5 pi05_libero", ours: "same", impact: none}
+  - {component: checkpoint, paper: "openpi-libero-2000", github: "brandonyang/openpi-libero-2000", ours: "same rev aaeeabc72f8a", impact: "none known; weights unverifiable"}
+  - {component: dataset/task suite, paper: "LIBERO-10 x10", github: "libero_10", ours: "task 2 (+ task 3 pilot)", impact: "coverage"}
+  - {component: layer, paper: "5 (KS3 oracle)", github: "default 11", ours: 5, impact: none}
+  - {component: alpha, paper: 0.5, github: "default 0.1", ours: 0.5, impact: none}
+  - {component: beta, paper: "0.1 (grid 0.1/0.3/0.5)", github: "default 0.3", ours: "0.1; also 0.2, 0.3", impact: "0.2 off-grid"}
+  - {component: strategy, paper: "global/per-step/pos-only", github: "+ random_matched, linear; per-step alpha fixed 1.0", ours: "global (+ shrinkage, random controls)", impact: high}
+  - {component: conceptor construction, paper: "R=X~'X~/N; C=R(R+a^-2 I)^-1", github: "same formula, different samples", ours: "V0 repo and V3 paper", impact: medium}
+  - {component: token pooling, paper: "mean over 10 tokens", github: "none (every token a row)", ours: "V0 none; V3 pooled", impact: medium}
+  - {component: centering, paper: "mean-centered", github: "uncentered", ours: "V0 uncentered; V3 centered", impact: low-medium}
+  - {component: Boolean operations, paper: "canonical pinv AND-NOT", github: "A inv(A+B-AB) B", ours: "V0 repo; V3 canonical", impact: low-medium}
+  - {component: evaluation protocol, paper: "15 fit + 30 test; Base = fit-set rate (inferred)", github: "15/15/15 windows", ours: "paired same-state baselines, 15-30 episodes", impact: high}
+  - {component: test states/seeds, paper: "not stated", github: "post-PR48 window scheme", ours: "0-14, 15-44, 45-49", impact: "high unknown"}
+  - {component: hyperparameter selection, paper: "best-of-240 on fit rollouts", github: "small sweep; empty best_configs.json", ours: "none", impact: medium}
+  - {component: hardware, paper: "B200 (latency)", github: unspecified, ours: "RTX 4090", impact: low-medium}
+
+confidence:
+  high: [model family and config, checkpoint name/step/repo, task identity, KS3 oracle config, layer indexing (0-based), hook site and gate formula, activation schema, fit N and split size, class counts 8/7, conceptor formula and precision]
+  medium: [checkpoint weight identity, LIBERO/robosuite/MuJoCo versions, token pooling/centering/AND (paper differs from repo), success labeling, GPU/bf16 numerics, beta 0.2 off-grid, class threshold]
+  low: [paper test states and seeds, whether Table 1 Base is the fit-set rate, code version behind paper numbers (pre or post PR48; which builder), libero_conceptors.npz (HTTP 401), selection procedure on fit rollouts, per-step implementation, controls on LIBERO, run count and noise seeding]
+
+remaining_unknowns:
+  - paper's 30 test init-state indices and seeds; whether they exclude the 15 fit states
+  - code commit/branch behind Tables 1 and 4 (pre or post PR48; which conceptor builder)
+  - whether Table 1 Base is the fit set or a separate paired 30-episode test run
+  - how per-configuration success on the fit rollouts was measured (episodes, noise control)
+  - per-step strategy implementation (alpha up to 10; N < d handling)
+  - exact checkpoint weights and JAX-to-PyTorch conversion details
+  - any shrinkage or random control on LIBERO
+  - LIBERO/robosuite/MuJoCo versions and evaluation GPU
+
+author_questions_draft:
+  status: draft only; nothing sent
+  questions:
+    - "Which LIBERO init-state indices and seeds were used for the 30 held-out test rollouts per task, and do they exclude the 15 fitting states (were fit rollouts init states 0-14, --seed 0)?"
+    - "Were the LIBERO experiments run before or after PR48 (2026-04-23, --seed began selecting init states)? Which commit or branch produced Tables 1 and 4?"
+    - "In Table 1 the LIBERO pi0.5 'Base' equals the Table 21 fit-set rates for all 10 tasks. Is Base the 15 fit rollouts, or a separate 30-episode unsteered test run on the same states as the steered runs?"
+    - "How was 'success on the fitting rollouts' obtained for each of the 240 configurations (steered runs on the 15 fit states? episodes per config? noise control?) and was the selected config re-evaluated on the test states exactly once?"
+    - "Were the reported conceptors built with the released token-flattened uncentered builder or the mean-pooled centered pinv pipeline of App. A.9.1? Is brandonyang/libero-conceptors public (anonymous access returns HTTP 401)?"
+    - "The repository fixes per-step alpha at 1.0, but Table 4 lists per-step alpha 10.0 (KS3). Which code produced these, and how is the per-step covariance handled when N < d?"
+    - "Is brandonyang/openpi-libero-2000 revision aaeeabc72f8a (2026-04-09) the exact weights behind the reported results?"
+    - "Was a random-eigenvector or a uniform-shrinkage (M=(1-beta)I) control run on LIBERO? Does the reported gain survive a shrinkage control?"
+    - "Are Table 1/4 cells single runs? Was policy sampling noise seeded?"
+    - "Which LIBERO/robosuite/MuJoCo versions and which GPU were used for the evaluation rollouts?"
+
+recommendation:
+  primary: contact authors (questions 1-5 first)
+  parallel_offline_options_not_done:
+    - rebuild V0/V3 conceptors from the authors' public KS3 fit activations and compare with ours (Phase 1B style)
+    - compute paper diagnostics (quota, overlap; Tables 18/19) on those activations
+  do_not_yet: begin an improvement method (the paper's evaluation protocol, and so the claim to improve on, is not pinned down)
+  fallback_if_no_reply: >-
+    V3 and random-matched controls at beta 0.2-0.3 on states 15-44, plus per-step steering, after the missing choices are documented and preregistered
+
+limits:
+  - paper read from arXiv v1 HTML (tables flattened); key numbers cross-checked programmatically; figures not viewed
+  - Base-column identity is a numerical observation, not a stated protocol
+  - pre-PR48 effect on the paper is a possibility, not a finding
+  - Fisher tests compare different state sets; reference only
+  - other upstream branches only listed; released activation dataset only sampled (30 metadata.json files)
+
+outputs:
+  - research/reproduction/phase4b_paper_protocol_audit.md
+  - research/reproduction/experiments/phase4b_paper_protocol_audit.yaml

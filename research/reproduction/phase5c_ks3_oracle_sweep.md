@@ -136,6 +136,18 @@ For per-step, the hook cache sets α to 0 by design; the conceptors are built at
 | 4 Test | 23:56 → 00:09 (13 m) | 4 × 30 = 120 |
 | **Total** | about 4 h 20 m wall on 2 GPUs | **2,370** |
 
+### 1.3 Execution history (continuations)
+
+Phase 5C ran across several sessions. No valid configuration was rerun.
+
+| Session | What ran | Rollouts |
+|---|---|---|
+| **1. Before the first continuation** (2026-09-24 19:50 → 23:50) | Preregistration. Stage 1 global sweep (60 configs), Stage 2 positive-only sweep (60), Stage 3 per-step sweep (12, α 1.0). Linear sweep started and interrupted (12/20). `select global`, `select positive_only` | 2,250 fit |
+| **2. First continuation** (2026-09-24 23:53 → 2026-09-25 00:15) | Audit of the existing outputs: all 132 selection-eligible configs valid, linear incomplete. `select per_step`. Decision to exclude linear. `freeze`. Stage 4 test (4 × 30). `test` analysis (with the analysis-tool fix). Report and YAML. Committed by the user as `fb1f826` | 120 test |
+| **3. Second continuation** (at `fb1f826`) | Re-audit only. All six stop conditions were already met: the frozen file's sha256 was unchanged, the NPZ sha256 was unchanged, the fit CSV had 132 rows, and all 4 test clients had `CLIENT_EXIT=0`. **No rollouts were run.** Only this section was added | 0 |
+
+Linear stays excluded. It is optional and not a Table 4 column, and it was excluded before any test rollout. Completing it now, after the test results are known, would add a strategy whose inclusion was decided post hoc. It also would not change the answer to the Table 4 question.
+
 ## 2. Grid searched
 
 | Strategy | Layers | α | β | Configurations | Status |

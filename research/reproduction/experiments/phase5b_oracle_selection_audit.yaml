@@ -1,0 +1,139 @@
+# Phase 5B Step 0: oracle selection audit (documentation only; see phase5b_oracle_selection_audit.md)
+experiment_id: phase5b_oracle_selection_audit
+status: audit_complete_no_runs
+date: '2026-09-24'
+paper: Contrastive Conceptor Activation Steering (COAST), arXiv:2605.17144 v1
+question: Can the released implementation reproduce the paper's oracle hyper-parameter selection (15 fit rollouts -> grid selection -> 30 test rollouts)?
+answer: >-
+  The procedure can be reproduced for global and positive-only on KS3 with CLI overrides only; per-step only at alpha=1.0 without a
+  src change; results cannot be verified as identical to the authors' runs because states, seeds, code version, noise and tie rule are unstated.
+  No conclusion about COAST efficacy is drawn.
+repository:
+  branch: exp/oracle-selection-reproduction
+  commit: db85bedd6f3e65e3ca4a883091ce0b1ad87b161e
+  upstream_base: 2afa10ee256a3b3edfeb56500fea166a0837f119
+  code_changes: none
+  runs_executed: none
+files_audited:
+  - experiments/libero/find_best_configs.py
+  - experiments/libero/compute_conceptors.py
+  - experiments/libero/README.md
+  - experiments/libero/run_end_to_end.sh
+  - experiments/libero/best_configs.json
+  - examples/libero_env/main.py
+  - scripts/serve_policy.py
+  - src/openpi/serving/steering.py
+  - src/openpi/serving/conceptors.py
+
+audit_answers:
+  q1_reproduces_paper_oracle: partial  # same method; defaults, strategy mixing, seed window and output path differ
+  q2_separate_selection_per_strategy: false  # single max() across all steered conditions (find_best_configs.py:314-318)
+  q3_compares_strategies_together: true  # default strategies include random_matched and linear in the same argmax
+  q4_fit_states_only: false  # no fit/test notion; window = (seed + k) % 50; default seed 7 -> states 7-16; README seed 15 -> states 15-29
+  q5_saves_all_config_results:
+    rates: true  # partial_results.jsonl, per_task_results.json, args.json
+    per_episode: false  # subprocess stdout discarded; recoverable from episode_NNN.mp4 frame counts
+    tie_sets: false
+  q6_paper_grid_expressible:
+    global: {paper: 60, repo: 60, exact: true}
+    positive_only: {paper: 60, repo: 60, exact: true}
+    per_step: {paper: 60, repo: 12, exact: false, reason: 'per-step alpha fixed at 1.0 (conceptors.py:380; steering.py _cache_key zeroes alpha)'}
+    linear: {paper_nominal: 60, repo_distinct: 20, exact: equivalent, reason: 'beta inert for h + alpha*v; paper linear form not verified [I]'}
+    total: {paper_nominal: 240, repo_distinct: 152, repo_distinct_with_per_step_alpha_change: 200}
+
+script_defaults_vs_needed:
+  layers: {default: [11], needed: [0, 5, 11, 17]}
+  alphas: {default: [0.1, 0.5, 1.0], needed: [0.1, 0.5, 1.0, 2.0, 10.0]}
+  betas: {default: [0.1, 0.3], needed: [0.1, 0.3, 0.5]}
+  strategies: {default: [global, per_step, positive_only, random_matched, linear], needed: one paper strategy per invocation; exclude random_matched}
+  num_episodes: {default: 10, needed: 15}
+  seed: {default: 7, needed: 0}
+  tasks: {default: all 10, needed: KITCHEN_SCENE3_turn_on_the_stove_and_put_the_moka_pot_on_it}
+  best_configs_path: {default: experiments/libero/best_configs.json (TRACKED), needed: examples/libero_env/output/phase5b_*/best_configs.json}
+  output_dir: {default: experiments/libero/steering_results (gitignored), needed: examples/libero_env/output/phase5b_*}
+  conceptor_npz: {hardcoded: conceptors/libero_conceptors.npz, use: Phase 5A V0 NPZ, sha256: 1ac8fceb11c71d8bc6c190b0563a82dc8dc572b269833502e26ffd7d8e82709c, keys: 184}
+tie_rule_in_script: first maximal in insertion order (strategy CLI order -> layer asc -> alpha asc -> beta asc); NaN dropped silently
+
+paper_vs_repository:
+  - {component: layers, paper: '0,5,11,17', repository: '11', change: CLI}
+  - {component: alpha, paper: '0.1,0.5,1,2,10', repository: '0.1,0.5,1.0', change: CLI}
+  - {component: beta, paper: '0.1,0.3,0.5', repository: '0.1,0.3', change: CLI}
+  - {component: global, paper: 60 configs, repository: 60 configs, change: CLI (own invocation)}
+  - {component: positive_only, paper: 60 configs, repository: 60 configs, change: CLI (own invocation)}
+  - {component: per_step, paper: '60 configs (KS3 oracle alpha 10)', repository: '12 configs (alpha 1.0)', change: 'code change C1 (src + experiments), conditional'}
+  - {component: linear, paper: nominal 60, repository: 20 distinct (beta inert), change: CLI}
+  - {component: random_matched, paper: not in grid, repository: in default list, change: CLI exclude}
+  - {component: selection_target, paper: maximize success on fitting rollouts, repository: window chosen by --seed, change: 'CLI --seed 0 --num_episodes 15'}
+  - {component: selection_scope, paper: one oracle per strategy, repository: one argmax across strategies, change: 'separate invocations + analysis tool'}
+  - {component: tie_rule, paper: not stated, repository: implicit first-in-order, change: pre-declare + report tie sets}
+  - {component: evaluation, paper: selected config on 30 test episodes, repository: not in script (README 15 eps seed 30), change: 'serve_policy.py + main.py --num_episodes 30 --seed 15'}
+  - {component: output, paper: n/a, repository: overwrites tracked best_configs.json, change: CLI --best_configs_path}
+
+required_code_changes:
+  for_recommended_plan: none
+  research_tool_to_add: research/reproduction/tools/analyze_phase5b_oracle.py  # per-strategy argmax, tie sets, NaN check, per-episode from mp4
+  conditional:
+    C1_per_step_alpha_axis:
+      files: [src/openpi/serving/conceptors.py, src/openpi/serving/steering.py, experiments/libero/find_best_configs.py]
+      effect: +48 configs, +720 rollouts, +2.5 GPU-h, NPZ +~2 GB
+      approval_required: true
+    C2_selection_logging_in_find_best_configs: {recommended: false, reason: analysis tool covers it without touching released code}
+
+compute_estimate:
+  hardware: 2x NVIDIA GeForce RTX 4090 (24 GB), both free at audit time
+  timing_basis:
+    measured: 'Phase 5A Step 1: 30 episodes in 356 s / 348 s -> ~11.7 s per episode on 1x RTX 4090'
+    per_episode_s: {typical: 11.5, all_success: 8.7, all_timeout: 17.8}
+    client_startup_s: 15
+    per_15ep_config_min: {typical: 3.1, range: [2.4, 4.7]}
+    concurrency_contingency: 0.15
+  configurations_ks3:
+    global: 60
+    positive_only: 60
+    per_step: {no_code_change: 12, with_C1: 60}
+    linear: 20
+    total: {no_code_change: 152, with_C1: 200, paper_nominal: 240}
+  stages:
+    stage1_global: {runs: 61, rollouts: 915, gpu_h: 3.2, gpu_h_range: [2.5, 4.8]}
+    stage2a_positive_only: {runs: 61, rollouts: 915, gpu_h: 3.2, gpu_h_range: [2.5, 4.8]}
+    stage2b_per_step_alpha1: {runs: 13, rollouts: 195, gpu_h: 0.7, gpu_h_range: [0.5, 1.0]}
+    stage2c_linear_optional: {runs: 21, rollouts: 315, gpu_h: 1.1, gpu_h_range: [0.8, 1.6]}
+    stage3_test_required: {conditions: [baseline, selected_global, selected_positive_only, selected_per_step], episodes_each: 30, rollouts: 120, gpu_h: 0.4}
+    stage3_test_optional: {conditions: [selected_linear, paper_stated_positive_only_L11_a1.0_b0.1], rollouts: 60, gpu_h: 0.2}
+  totals:
+    required: {rollouts: 2145, gpu_h: 7.5, gpu_h_range: [5.8, 10.9]}
+    with_all_options: {rollouts: 2520, gpu_h: 8.8, gpu_h_range: [6.8, 12.8]}
+    with_C1_extra: {rollouts: 720, gpu_h: 2.5}
+    paper_nominal_240_literal: {rollouts: 3600, gpu_h: 12.5}
+    all_10_tasks_not_proposed: {rollouts: ~21000, gpu_h: ~75}
+  wall_clock_2gpu_h: {stage1: 1.9, stage2: 3.7, stage3: 0.5, total: ~6}
+  wall_clock_1gpu_h: ~11-12
+  storage_gb: ~2.5 (videos, gitignored); NPZ already present (755 MB)
+  verdict: affordable; staging recommended for decision gates, not for cost
+
+recommended_plan:
+  stage0_preparation: [preregistration (states, grid, NPZ sha256, tie rule, reading rule), pre-flight NPZ/key/test checks, write analysis tool T1]
+  stage1: {task: KS3, strategy: global, sweep_states: 0-14 (--seed 0 --num_episodes 15), shards: 'GPU0 layers 0,5; GPU1 layers 11,17', gate: record tie set and whether L5/a0.5/b0.1 is in it; proceed regardless}
+  stage2: {invocations: [positive_only (GPU0), per_step alpha=1.0 (GPU1), linear optional (GPU1)], mixing: never, selections_frozen_before_test: true}
+  stage3: {server: serve_policy.py --pytorch --steer, test_states: 15-44 (--seed 15 --num_episodes 30), rerun_even_if_same_as_phase5a: true}
+  tie_rule: highest fit success; ties -> first in (layer asc, alpha asc, beta asc); full tie set reported; no tie-break reruns; no test data in selection
+  reading_rule: per strategy vs paper Table 4 (global 28/30, per-step 26/30, positive-only 24/30); consistent if inside paper Wilson 95%; inconsistent if Fisher p<0.05; else inconclusive; report fit-to-test drop
+  not_recommended_now: [all 10 tasks, seeded/paired noise, V3 builder arm, authors-activation arm, shrinkage/random controls]
+
+decisions_needed:
+  E1_sweep_states: {default: 'fit states 0-14 (--seed 0)', reason: literal paper reading; README --seed 15 overlaps test states 15-44}
+  E2_test_states: {default: '15-44 (--seed 15 --num_episodes 30)'}
+  E3_per_step_alpha_C1: {default: not now; run alpha=1.0; decide after stage 2}
+  E4_include_linear: {default: include}
+  E5_tie_rule: {default: first-in-order + tie sets}
+  E6_gpus: {default: both RTX 4090, one sweep process each}
+
+faithful_reproduction_possible:
+  procedure: yes
+  global: yes (exact grid)
+  positive_only: yes (exact grid)
+  per_step: partial without C1; yes with C1
+  linear: equivalent (assumes same h + alpha*v form)
+  identical_to_authors_run: not verifiable
+  unresolvable_items: [paper fit/test state IDs and seeds, code version pre/post PR48, builder V0 vs V3 behind paper numbers, tie rule, policy noise, number of runs per cell, checkpoint weight identity]
+coast_fails_conclusion: not drawn

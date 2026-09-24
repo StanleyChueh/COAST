@@ -746,6 +746,7 @@ class SteeredPolicyWrapper:
                 # the seed is identical on every run.
                 seed_key = (key[0], key[1], key[2], key[4])  # (task, layer, α, strategy) — drop β
                 seed = _stable_random_seed(seed_key)
+                logger.info("random_matched: seed=%d from seed_key=%r", seed, seed_key)
                 C = get_conceptor_matrix(
                     self._npz,
                     task=key[0],

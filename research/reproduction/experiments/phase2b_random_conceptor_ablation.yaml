@@ -1,0 +1,214 @@
+# Phase 2B: random matched conceptor ablation — baseline vs shrinkage (0.9 I) vs real COAST (global, V0)
+# vs random matched (same spectrum, random eigenvectors).
+# DEVELOPMENT SPLIT ONLY (seed 15, init states 15-29). States 30-44 remain untouched.
+# Report: research/reproduction/phase2b_random_conceptor_ablation.md
+
+experiment_id: phase2b_random_conceptor_ablation_task02_seed15_L5_a0.5_b0.1_noise100
+timestamp: "2026-09-24T10:07:53+08:00"  # server launch; clients 10:08:31-10:19:13
+paper: "Contrastive Conceptor Activation Steering (COAST): Unlocking Vision-Language-Action Models through Hidden States"
+arxiv_id: "2605.17144"
+base_commit: c460acd23c532c339ff8157324ecd4b111045170  # Phase 2A
+branch: exp/random-conceptor-ablation
+code_state: "uncommitted working tree on base_commit; sha256(git diff HEAD -- src scripts examples packages) = 9dcda0e5f8a0dbb3e5d8fe61b70e31f8beb16fe41d2f7b57fa6715e4e2f3b3e9"
+split: development
+held_out_states_30_44_used: false
+preregistration: "examples/libero_env/output/phase2b_servers/preregistration.txt (10:07:42, before any Phase 2B rollout): seed 100, order A->B->C->D, one run each, primary comparison C vs D"
+
+model: pi0.5
+policy_config: pi05_libero
+backend: pytorch
+checkpoint: checkpoints/openpi-libero-2000
+task_suite: libero_10
+task_id: 2
+task_name: KITCHEN_SCENE3_turn_on_the_stove_and_put_the_moka_pot_on_it
+env_seed: 15
+init_states: [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
+num_episodes: 15
+max_steps: 520
+replan_steps: 5
+noise_control: {enabled: true, master_seed: 100, shape: [10, 32]}
+physical_gpu_id: 1  # RTX 4090; one server process for all four conditions (same GPU as Phase 2A)
+
+conceptor: {path: conceptors/phase1b_repo_task02.npz, sha256: 8b1c802a62885352a84483f5c2ef600bcc0358f03cdf435f30e7492211ec80f3, key: KITCHEN_SCENE3_turn_on_the_stove_and_put_the_moka_pot_on_it__L5__0.5__C_contrastive}
+conditions:
+  A_baseline: {payload: none, M: "I (no hook)"}
+  B_shrinkage: {strategy: shrinkage, layer: 5, beta: 0.1, alpha: ignored, M: "0.9 I", conceptor: none_read}
+  C_real_coast: {strategy: global, layer: 5, alpha: 0.5, beta: 0.1, M: "0.9 I + 0.1 C_real"}
+  D_random_matched: {strategy: random_matched, layer: 5, alpha: 0.5, beta: 0.1, M: "0.9 I + 0.1 C_random"}
+tuning: none
+
+random_matched_construction:
+  implementation: "existing upstream strategy (commit 6c34a11), reused unchanged: openpi.serving.conceptors.random_matched_conceptor via steering.get_conceptor_matrix"
+  steps:
+    - "C_sym = (C_real + C_real^T) / 2  (float64)"
+    - "Lambda = eigvalsh(C_sym)"
+    - "Q, R = np.linalg.qr(np.random.default_rng(seed).standard_normal((d, d)))"
+    - "C_random = Q diag(Lambda) Q^T -> float32"
+  seed: 1466119911
+  seed_derivation: "blake2b(repr((task, layer=5, alpha=0.5, 'random_matched')), digest_size=4); beta-independent; process-stable"
+  seed_logged_by_server: "random_matched: seed=1466119911 from seed_key=('KITCHEN_SCENE3_...', 5, 0.5, 'random_matched')"
+  dimension: 1024
+  qr_sign_fix: "not applied in code; provably a no-op for C_random (column signs cancel in Q L Q^T); verified: sign-fixed C bit-identical to production (max |diff| = 0.0; 537/1024 negative diag(R))"
+
+spectral_validation:  # research/reproduction/tools/validate_phase2b_random_conceptor.py
+  wrapper_M_equals_0.9I_plus_0.1C_random: true
+  symmetry_error:
+    C_real: {max_abs: 3.48e-3, rel_frob: 0.0847, skew_part_frob_over_C_frob: 0.0424}
+    C_random: {max_abs: 0.0, rel_frob: 0.0}
+  C_real_general_eigvals: {max_abs_imag: 0.0, max_abs_diff_vs_symmetric_part: 0.00534}
+  spectrum:  # identical for C_real (symmetric part) and C_random
+    max: 0.352151
+    top10: [0.352151, 0.342705, 0.334445, 0.332599, 0.321843, 0.319379, 0.315093, 0.31121, 0.30718, 0.302096]
+    median: 0.0013238
+    min: -0.0052535
+    trace: 18.938975
+    trace_over_d: 0.018495
+    n_gt_0.1: 60
+    n_gt_0.01: 197
+    n_gt_0.001: 571
+    n_negative: 3
+  eig_diff_sym_real_vs_random: {l2: 2.06e-9, max_abs: 2.04e-10, rel_l2: 1.14e-9}
+  frobenius_norm: {real: 1.80729, random: 1.80568}
+  orthogonality_error_Q: {max_abs_QtQ_minus_I: 1.33e-15, frob: 3.34e-14}
+  eigvec_similarity:
+    top_k_subspace_overlap_real_vs_random: {1: 0.00009, 5: 0.00318, 10: 0.00714, 20: 0.02025, 50: 0.04920, 100: 0.09733}
+    chance_k_over_d: {1: 0.00098, 5: 0.00488, 10: 0.00977, 20: 0.01953, 50: 0.04883, 100: 0.09766}
+    top_k_subspace_overlap_real_vs_real: 1.0
+    top_k_subspace_overlap_seed_vs_seed_plus_1: {1: 0.00211, 5: 0.00290, 10: 0.00868, 20: 0.01822, 50: 0.04795, 100: 0.09675}
+    abs_cos_leading_eigvecs_1_to_5: [0.009614, 0.006289, 0.002445, 0.013931, 0.02858]
+    max_abs_cos_real_top1_vs_random_top100: 0.0820
+    frobenius_cosine_trace_free: {real_vs_random: 0.00064, real_vs_real: 1.0, random_vs_random_seed_plus_1: -0.00125}
+  M_bf16_diagonal:
+    real: {fp32_mean: 0.901850, bf16_mean: 0.902092, values: {"0.9023438": 728, "0.8984375": 185, "0.9062500": 105, "0.9101562": 5}}
+    random: {fp32_mean: 0.901849, bf16_mean: 0.902344, values: {"0.9023438": 1024}}
+    shrinkage: {fp32_mean: 0.900000, bf16_mean: 0.898438, values: {"0.8984375": 1024}}
+  hidden_state_check_phase1a_layer5:  # 28200 vectors, 15 episodes (8 success), every 4th rollout step
+    rayleigh_hCh_over_hh: {real: 0.006236, random: 0.017375, trace_over_d: 0.018495}
+    predicted_bf16_norm_ratio: {real: 0.90063, random: 0.90233, shrinkage: 0.89838}
+    predicted_bf16_cos_delta_h: {real: -0.99963, random: -0.99852, shrinkage: -0.99990}
+    steered_state_rel_distance_fp32: {real_vs_shrinkage: 0.00202, random_vs_shrinkage: 0.00539, real_vs_random: 0.00559}
+
+code_changes:
+  modified:
+    src/openpi/serving/steering.py: "+1 logger.info line recording the random_matched seed and seed_key (no behavior change)"
+  added:
+    - tests/test_steering_random_matched.py
+    - research/reproduction/tools/validate_phase2b_random_conceptor.py
+    - research/reproduction/tools/analyze_phase2b.py
+  unchanged: "conceptor construction; activation collection; ConceptorSteeringHook / global formula; ShrinkageSteeringHook; random_matched_conceptor; client; ALLOWED_STRATEGIES; ~/Stanley_ws/lerobot untouched"
+
+unit_tests:
+  cpu:
+    file: tests/test_steering_random_matched.py
+    count: 11
+    result: all passed
+    covers:
+      "1_eigenvalues_preserved": "hook C (from M) and generator output match spectrum of sym(C_real); trace; exact symmetry"
+      "2_eigenvectors_changed": "top-4 subspace overlap 1.0 self vs < 0.25 random (chance 1/16); large Frobenius difference"
+      "qr_sign_fix": "sign-fixed Q gives array_equal C_random"
+      "3_same_seed_identical": "two wrappers torch.equal M; generator deterministic; documented seed used and logged"
+      "4_different_seed_different_eigvecs": "same spectrum, overlap < 0.25"
+      "5_global_unchanged": "global M == 0.9I + 0.1C_real before/after random_matched; same cached object; NPZ untouched"
+      "6_shrinkage_works": "M == 0.9I, h' == 0.9h alongside global and random_matched hooks"
+    note: "fixture eigengap check first asserted a 2x ratio (fixture spectrum smooth, abs gap 0.028); changed to abs gap > 0.01. Test-expectation fix, no code change."
+  full_ci_suite: {command: 'CUDA_VISIBLE_DEVICES="" JAX_PLATFORMS=cpu uv run pytest --strict-markers -m "not manual"', result: "420 passed, 47 skipped, 0 failed", phase2a_baseline: "409 passed"}
+  ruff: clean
+
+server_command: >-
+  CUDA_VISIBLE_DEVICES=1 uv run --no-sync scripts/serve_policy.py --pytorch --steer --noise-control --steering-diagnostics
+  --conceptor-npz conceptors/phase1b_repo_task02.npz --port 8102 policy:checkpoint --policy.config pi05_libero --policy.dir checkpoints/openpi-libero-2000
+client_command:
+  common: >-
+    CUDA_VISIBLE_DEVICES=1 MUJOCO_GL=egl LIBERO_CONFIG_PATH=/home/stanley/Stanley_ws/COAST-research/libero_config_coast
+    uv run --no-sync python main.py --task_suite_name libero_10 --task_id 2 --num_episodes 15 --seed 15 --port 8102
+    --policy_noise_seed 100 --output_dir output/phase2b_<cond>_task02_seed15
+  steer: "--steer --steering_layer 5 --steering_alpha 0.5 --steering_beta 0.1 --log_steering_diagnostics --steering_strategy <strategy>"
+  driver: examples/libero_env/output/phase2b_servers/run_clients.sh
+  cwd: /home/stanley/Stanley_ws/COAST-research/COAST/examples/libero_env
+  runs_per_condition: 1
+  wall: {A: "10:08:31-10:10:58", B: "10:10:58-10:13:49", C: "10:13:49-10:16:30", D: "10:16:30-10:19:13"}
+analysis_command: 'CUDA_VISIBLE_DEVICES="" JAX_PLATFORMS=cpu uv run python research/reproduction/tools/analyze_phase2b.py'
+
+validation:
+  noise_fingerprints_recomputed_and_matched: 3676
+  requests: {A: 845, B: 980, C: 922, D: 929}
+  shared_coordinates_identical: {A_B: [802, 802], A_C: [745, 745], A_D: [746, 746], B_C: [904, 904], B_D: [905, 905], C_D: [912, 912]}
+  diagnostics: "B 9800 / C 9220 / D 9290 hook applications; 10 per call, steps 0..9, layer 5, 10 tokens, dim 1024, beta 0.1, correct strategy, finite; schedule == fingerprint schedule"
+  replay_vs_phase2a:
+    baseline: {outcomes: 15, rollout_lengths: 15}
+    shrinkage: {outcomes: 15, rollout_lengths: 14, differing: {"19": [209, 239]}}
+    coast: {outcomes: 15, rollout_lengths: 14, differing: {"29": [225, 224]}}
+    reading: "unsteered path replays exactly; steered path length jitter across processes (up to 30 steps here), outcomes unchanged"
+
+results:
+  success:
+    A_baseline: {successes: 13, rate: 0.867, wilson95: [0.621, 0.963]}
+    B_shrinkage: {successes: 10, rate: 0.667, wilson95: [0.417, 0.848]}
+    C_real_coast: {successes: 11, rate: 0.733, wilson95: [0.48, 0.891]}
+    D_random_matched: {successes: 11, rate: 0.733, wilson95: [0.48, 0.891]}
+  episode_level:  # order = init states 15..29
+    A_baseline:       [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1]
+    B_shrinkage:      [0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1]
+    C_real_coast:     [0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1]
+    D_random_matched: [0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1]
+    rollout_steps:
+      A_baseline:       [216, 215, 262, 252, 211, 352, 520, 228, 259, 235, 217, 240, 249, 520, 222]
+      B_shrinkage:      [520, 211, 239, 520, 239, 238, 520, 177, 239, 520, 224, 246, 248, 520, 217]
+      C_real_coast:     [520, 212, 238, 520, 201, 232, 203, 238, 253, 520, 222, 258, 224, 520, 224]
+      D_random_matched: [520, 209, 234, 520, 208, 231, 200, 226, 257, 520, 221, 246, 299, 520, 206]
+    csv: research/reproduction/experiments/phase2b_episode_results.csv
+  transitions:
+    coast_vs_random_matched: {agreement: 15, disagreement_states: [], identical_length: 4, mcnemar_exact_p_reference_only: 1.0}
+    coast_vs_shrinkage: {agreement: 14, disagreement_states: [21], identical_length: 4, mcnemar_exact_p_reference_only: 1.0}
+    random_matched_vs_shrinkage: {agreement: 14, disagreement_states: [21], identical_length: 5, mcnemar_exact_p_reference_only: 1.0}
+    baseline_to_shrinkage: {fail_to_success: 0, success_to_fail: 3, lost: [15, 18, 24], mcnemar_exact_p_reference_only: 0.25}
+    baseline_to_coast: {fail_to_success: 1, success_to_fail: 3, gained: [21], lost: [15, 18, 24], mcnemar_exact_p_reference_only: 0.625}
+    baseline_to_random_matched: {fail_to_success: 1, success_to_fail: 3, gained: [21], lost: [15, 18, 24], mcnemar_exact_p_reference_only: 0.625}
+    all_four_success: 10
+    all_four_failure: 1  # state 28
+    steered_all_agree: 14
+  intervention_magnitude_layer5:  # per hook application
+    B_shrinkage: {n: 9800, mean_delta_norm: 17.341, sd: 2.691, min: 13.068, max: 24.632, mean_relative_delta: 0.10163, cosine: -0.99990, norm_ratio: 0.89838}
+    C_real_coast: {n: 9220, mean_delta_norm: 16.963, sd: 2.668, min: 12.738, max: 24.101, mean_relative_delta: 0.09942, cosine: -0.99962, norm_ratio: 0.90062}
+    D_random_matched: {n: 9290, mean_delta_norm: 16.684, sd: 2.596, min: 12.545, max: 23.622, mean_relative_delta: 0.09783, cosine: -0.99851, norm_ratio: 0.90233}
+    by_denoising_step_mean_delta_norm:
+      B_shrinkage: [22.747, 20.331, 19.055, 18.169, 17.537, 16.480, 15.844, 15.125, 14.352, 13.773]
+      C_real_coast: [22.298, 19.930, 18.672, 17.796, 17.168, 16.121, 15.486, 14.769, 13.990, 13.394]
+      D_random_matched: [21.900, 19.570, 18.339, 17.483, 16.870, 15.851, 15.236, 14.546, 13.802, 13.244]
+    by_denoising_step_norm_ratio:
+      B_shrinkage: [0.89837, 0.89837, 0.89838, 0.89837, 0.89837, 0.89837, 0.89837, 0.89838, 0.89841, 0.89842]
+      C_real_coast: [0.90039, 0.90039, 0.90043, 0.90046, 0.90051, 0.90058, 0.90066, 0.90076, 0.90093, 0.90115]
+      D_random_matched: [0.90232, 0.90233, 0.90233, 0.90233, 0.90234, 0.90234, 0.90234, 0.90233, 0.90234, 0.90234]
+    paired_shared_coordinates:
+      shrinkage_vs_coast: {n: 9040, delta_norm_ratio: 1.0226, norm_ratio_diff: -0.00224}
+      shrinkage_vs_random_matched: {n: 9050, delta_norm_ratio: 1.0394, norm_ratio_diff: -0.00395}
+      coast_vs_random_matched: {n: 9120, delta_norm_ratio: 1.0164, norm_ratio_diff: -0.00171}
+  hidden_norm_change:
+    mean_hidden_norm: {B_shrinkage: 170.63, C_real_coast: 170.56, D_random_matched: 170.54}
+    paired_rollout_step0_hidden_norm_rel_diff_by_denoising_step:  # identical obs + noise; 15 calls x 10 steps
+      coast_minus_random: [0.0, 1.04e-4, 1.55e-4, 2.16e-4, 2.06e-4, 3.02e-4, 3.58e-4, 3.93e-4, 2.76e-4, 3.44e-4]
+      shrinkage_minus_coast: [0.0, 6.9e-5, 1.09e-4, 2.01e-4, 3.35e-4, 2.44e-4, 3.94e-4, 4.23e-4, 4.91e-4, 6.70e-4]
+      shrinkage_minus_random: [0.0, 1.73e-4, 2.64e-4, 4.17e-4, 5.41e-4, 5.46e-4, 7.52e-4, 8.16e-4, 7.67e-4, 1.01e-3]
+
+interpretation:  # bounded to this configuration
+  outcome_case: "Case 2: real COAST ~= random matched ~= shrinkage"
+  points:
+    - "Random matched (same spectrum, random eigenvectors) reproduced all 15 real-COAST episode outcomes, including COAST's only non-shrinkage outcome (state 21)."
+    - "No detectable behavioral contribution of the conceptor direction; the state-21 COAST-vs-shrinkage difference is not direction-specific (magnitude or generic spectrum-level term; not separable here)."
+    - "Mechanism: all three interventions are ~10% contraction along h (cos -0.9985..-0.9999; contraction 9.78-10.16%). C_real's Rayleigh quotient on real layer-5 states (0.006) is below a random rotation's (0.017): h lies mostly in C_real's low-eigenvalue subspace."
+    - "Does not show conceptor directions are useless in general: weak C (lambda_max 0.35), small beta, one layer/task/seed/random basis."
+    - "All counts (13/10/11/11) within baseline noise-seed spread (7-13) from Phase 1D; no pairwise difference statistically distinguishable at N=15."
+
+runtime: {clients_total: "~11 min", spectral_validation: "~7 s", ci: "~16 s"}
+vram: {gpu1_peak_mib: 8343, gpu1_peak_util_pct: 73, source: examples/libero_env/output/phase2b_servers/gpu1_vram.csv}
+errors: none  # 0 Traceback/ERROR server lines; all clients CLIENT_EXIT=0
+warnings: ["robosuite private macro file notice", "LIBERO datasets path does not exist (not needed for eval)"]
+housekeeping: "outputs (~60 MB) gitignored, not committed; server and GPU logger stopped; ~/Stanley_ws/lerobot untouched; states 30-44 unused"
+
+limitations:
+  - "Small N: 15 episodes per condition, one master noise seed, one run each, one random basis (seed 1466119911)."
+  - "Single task, single layer (5), single beta (0.1), single alpha (0.5), single conceptor (V0), development split."
+  - "Not magnitude-matched: realized contraction 10.16% / 9.94% / 9.78% (B/C/D) from bf16 diagonal rounding and differing Rayleigh quotients; not corrected (would require tuning)."
+  - "C_random matches sym(C_real); C_real's 4.2% skew part not reproduced (contributes nothing along h)."
+  - "Steered-path rollout-length jitter across processes (up to 30 steps) limits interpretation of single-state length differences."
+  - "Mechanism measured only at the hooked layer."

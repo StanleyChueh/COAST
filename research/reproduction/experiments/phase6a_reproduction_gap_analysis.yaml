@@ -1,0 +1,121 @@
+# Phase 6A: reproduction-gap analysis (analysis only; see ../phase6a_reproduction_gap_analysis.md)
+experiment_id: phase6a_reproduction_gap_analysis
+status: complete
+date: '2026-09-25'
+paper: Contrastive Conceptor Activation Steering (COAST), arXiv:2605.17144 v1
+question: Why does our KS3 reproduction not match the paper; is the gap due to (A) missing reproduction details, (B) released-implementation differences, or (C) a
+  method limitation?
+repository: {branch: exp/reproduction-gap-analysis, commit: 978de727b4ae1708fb8dc05286f897569dcbff80, upstream_base: 2afa10ee256a3b3edfeb56500fea166a0837f119,
+  code_changes: none, experiments_run: none}
+verdict:
+  status: reproduction gap observed
+  not_claimed: [COAST fails, paper numbers are wrong]
+  ruled_out_by_measurement: [fixed configuration (oracle 21/30 vs fixed 19/30), missing oracle selection (run with released tool, Phase 5C)]
+  bounded_unlikely_alone: [test-state window, V0 vs V3 builder, checkpoint identity, single-run policy noise, software versions]
+  leading_unbounded: [how the Table 4 oracle number was produced (fresh test vs best-of-grid on reporting rollouts; runs per cell), code version behind Table 4
+      (per-step alpha 10 absent from release)]
+  method_limitation_C: hypothesis supported in our setup (COAST ~ 0.9*h shrink ~ random matched ~ baseline on KS3), not a conclusion; one task, one checkpoint;
+    cannot be separated from A until the paper protocol is known
+measured_summary:
+  paper_table4_ks3: {global: 28/30, per_step: 26/30 (alpha 10), positive_only: 24/30, base_table1: 0.53}
+  ours_global_on_states_15_44: {phase4a_fixed: 20/30, phase5a_fixed: 19/30, phase5c_oracle: 21/30, pooled: 60/90, fisher_pooled_vs_28_of_30: 0.0038}
+  ours_unsteered_on_states_15_44: {phase4a: 21/30, phase5a: 19/30, phase5c: 17/30, pooled: 57/90, fisher_steered_vs_unsteered_pooled: 0.755}
+  ours_phase5c_other: {positive_only_L0_a2_b0.3: 17/30, per_step_L5_a1_b0.3: 15/30}
+  ours_unsteered_fit_states_0_14: {phase1a: 8/15, phase5c_pooled_fit_baselines: 36/75}
+history:
+- {phase: 1B, result: V0 vs V3 conceptors differ 53-123% rel. Frobenius; L5 a0.5 quota V0 0.0185 V3 0.0103, meaning: builders differ numerically}
+- {phase: 1D, result: 'paired noise: baseline 13, V0 11, V3 11 of 15; V0=V3 on 15/15; noise seed alone 7-13/15', meaning: builder difference has no behavioural
+    effect at paper config; noise dominates N=15}
+- {phase: 1E, result: 'cos(dh,h)=-0.9996, |dh|/|h|=0.0994', meaning: COAST ~ uniform 0.9*h shrink at paper config}
+- {phase: 2A, result: COAST 11 vs shrinkage 10 of 15; same outcome 14/15, meaning: shrinkage reproduces COAST}
+- {phase: 2B, result: COAST 11 vs random matched 11 of 15; same outcome 15/15, meaning: conceptor direction not behaviourally relevant here}
+- {phase: 3A, result: 'held-out 30-44: baseline 9, shrink 10, COAST 11, random 11 of 15', meaning: no demonstrable gain}
+- {phase: 4A, result: 'all 50: baseline 30, COAST 32, shrink 31; 15-44: baseline 21, COAST 20', meaning: COAST ~ baseline ~ shrinkage}
+- {phase: 4B, result: model/checkpoint/config/hook match; states, seeds, code version, Base definition, builder unknown, meaning: evaluation protocol unverifiable}
+- {phase: 5A, result: 'fixed L5 a0.5 b0.1: COAST 19/30, baseline 19/30 (paper 28/30, p=0.010)', meaning: reproduction gap observed}
+- {phase: 5B, result: oracle procedure runnable with CLI flags; per-step alpha only 1.0, meaning: feasible except per-step alpha}
+- {phase: 5C, result: 'oracle: global 21, positive_only 17, per_step 15, baseline 17 (of 30)', meaning: gap persists under oracle selection}
+gap_table:
+  checkpoint:
+    model: {paper: pi0.5 pi05_libero, ours: same, confidence: high, impact: none}
+    checkpoint: {paper: openpi-libero-2000 step 2000, ours: brandonyang/openpi-libero-2000 rev aaeeabc72f8a, confidence: high, impact: none}
+    weight_hash: {paper: not published, ours: unverifiable, confidence: medium, impact: low, bound: unsteered fit rate 8/15 equals paper Base 0.53}
+  dataset:
+    task: {paper: KS3, ours: libero_10 task 2, confidence: high, impact: none}
+    libero_version: {paper: not stated, ours: Robot-VLA/LIBERO d63b117, confidence: low, impact: low}
+    split: {paper: 15 fit + 30 test; no IDs, ours: 'fit 0-14, test 15-44', confidence: low, impact: bounded, bound: best contiguous 30-window 22/30 (Phase 4A)}
+    seeds: {paper: not given, ours: seed = init-state offset + env/np seed (post-PR48), confidence: low, impact: see split}
+    pre_post_pr48: {paper: unknown, ours: post, confidence: low, impact: bounded, bound: window 0-29 COAST 19/30}
+  evaluation:
+    fit_episodes: {paper: 15, ours: 15, confidence: high, impact: none}
+    test_episodes: {paper: 30, ours: 30 single run, confidence: medium, impact: see split}
+    oracle_selection: {paper: 'selected on fitting rollouts; oracle = best rollout success rate (ambiguous)', ours: fit re-rollouts, per-strategy argmax, frozen before
+        test, confidence: low, impact: high unbounded}
+    runs_per_cell: {paper: not stated, ours: 1, confidence: low, impact: medium}
+    base_definition: {paper: equals fit-set rate 10/10 tasks (inferred), ours: separate test runs 17-21/30, confidence: low, impact: claimed gain only}
+  conceptor:
+    token_handling: {paper_v3: mean-pool 10 tokens, repo_v0: every token a row, confidence: medium, impact: bounded (V0=V3 15/15 paired)}
+    centering: {paper_v3: centered, repo_v0: uncentered, confidence: medium, impact: bounded}
+    boolean_and: {paper_v3: canonical pinv symmetric, repo_v0: 'A inv(A+B-AB) B non-symmetric', confidence: medium, impact: bounded}
+    released_npz: {paper: brandonyang/libero-conceptors, ours: HTTP 401, confidence: low, impact: would identify builder}
+  hyperparameter_search:
+    grid_global_positive_only: {paper: 4x5x3 each, ours: 60 + 60, confidence: high, impact: none}
+    per_step_alpha: {paper: KS3 alpha 10, ours: fixed 1.0, confidence: low (known gap), impact: per-step column only}
+    released_best_configs: {paper: README says committed, ours: empty placeholder, confidence: low, impact: would show authors' selections}
+  policy_randomness:
+    noise: {paper: not described, ours: unseeded default (5A/5C), confidence: low, impact: bounded for single run (P(>=28|0.67)=0.0007)}
+    spread: {ours: 'noise seed alone 7-13/15; fit baselines 4-11/15 (over-dispersed p=0.035)'}
+  software:
+    libero: {paper: not stated, ours: d63b117}
+    robosuite: {paper: not stated, ours: 1.4.0}
+    mujoco: {paper: not stated, ours: 3.2.3}
+    coast_openpi_commit: {paper: not stated, ours: 2afa10e + opt-in research instrumentation (default path unmodified), confidence: low, impact: high unbounded}
+    torch_jax: {ours: torch 2.7.1+cu126, jax 0.5.3, transformers 4.53.2}
+    hardware: {paper: B200 (latency), ours: RTX 4090, impact: low}
+new_calculations:
+  window_scan:
+    source: research/reproduction/experiments/phase4a_episode_results.csv (KS3, 50 states, one paired-noise run)
+    windows: contiguous 30-state, cyclic mod 50
+    baseline: {all50: 30, win_0_29: 21, win_15_44: 21, best: 22, worst: 13, n_ge_28: 0}
+    coast_L5_a0.5_b0.1: {all50: 32, win_0_29: 19, win_15_44: 20, best: 22, worst: 16, n_ge_28: 0}
+    coast_b0.3: {all50: 27, win_0_29: 14, win_15_44: 16, best: 19, worst: 13, n_ge_28: 0}
+    shrink_b0.1: {all50: 31, win_0_29: 17, win_15_44: 21, best: 22, worst: 16, n_ge_28: 0}
+    caveat: single noise realisation; bounds the expected window rate, not every draw
+  order_statistic:
+    model: max of m iid Binomial(30, p) (independence overstates m)
+    p_0.63: {m1: [18.9, 0.000], m12: [23.1, 0.002], m60: [24.7, 0.010], m240: [25.8, 0.038]}
+    p_0.67: {m1: [20.1, 0.001], m12: [24.1, 0.009], m60: [25.7, 0.043], m240: [26.7, 0.162]}
+    p_0.70: {m1: [21.0, 0.002], m12: [24.9, 0.025], m60: [26.4, 0.119], m240: [27.4, 0.398]}
+    columns: [expected_max, P(max>=28)]
+    reading: a single fresh test at our measured rate cannot plausibly give 28/30; best-of-grid on the reporting rollouts can (compatibility, not evidence)
+unknowns_ranked:
+- {rank: 1, unknown: how the Table 4 oracle number was produced (fresh test vs best-of-grid on reporting rollouts; runs per cell), explains_gap: fully compatible,
+  bound: none, category: A}
+- {rank: 2, unknown: code version / pipeline behind Table 4, explains_gap: possibly, bound: 'partial (V0=V3, V3~shrink offline); unreleased code unseen', category: B}
+- {rank: 3, unknown: policy noise seeding and repeated runs, explains_gap: only with rank 1 or best-of-k, bound: 'single run P=0.0007; best of 12 P~0.009', category: A}
+- {rank: 4, unknown: test state IDs and seeds, explains_gap: unlikely alone, bound: best contiguous window 22/30, category: A}
+- {rank: 5, unknown: V0 vs V3 builder, explains_gap: unlikely at tested config, bound: identical 15/15 paired outcomes, category: B}
+- {rank: 6, unknown: exact checkpoint weights, explains_gap: unlikely, bound: fit rate equals paper Base, category: B}
+- {rank: 7, unknown: Base definition, explains_gap: no for steered 28/30; yes for claimed gain, category: A}
+- {rank: 8, unknown: LIBERO/robosuite/MuJoCo versions, explains_gap: unlikely, bound: base rate matches, category: A}
+- {rank: null, unknown: per-step alpha 10, explains_gap: per-step column only, bound: confirmed difference, category: B}
+author_questions_draft_not_sent:
+- Is Table 4 KS3 28/30 one fit-selected config tested once on 30 separate rollouts, or best-of-grid on the reported rollouts? How many runs per cell?
+- Which init-state indices and seeds for the 15 fit and 30 test rollouts? Pre- or post-PR #48?
+- Which commit/branch produced Tables 1 and 4? How was per-step alpha 10 produced when the release fixes it at 1.0?
+- Released V0 builder or App. A.9.1 pipeline? Can brandonyang/libero-conceptors be made public (HTTP 401)?
+- Exact checkpoint revision/hash and PyTorch conversion path?
+- Was flow-matching sampling noise seeded, and how?
+- Is Table 1 Base the 15 fit rollouts or a separate unsteered test run?
+- LIBERO, robosuite, MuJoCo versions?
+recommendation:
+  option: B (contact authors; questions prepared, not sent)
+  why: all self-testable explanations are measured or bounded; leading explanations (ranks 1-2) answerable only by the authors
+  evidence: [5A and 5C gaps (p=0.010, 0.042; pooled 0.004), Phase 4A window scan max 22/30, Phase 1D V0=V3, fit rate equals paper Base, order-statistic compatibility
+      of best-of-grid reporting]
+  remaining_uncertainty: [one task and one checkpoint, single unpaired test runs (SD ~0.09), states 15-44 reused across phases, rank 1 is a compatibility argument not
+      a finding, unreleased code may differ]
+  not_recommended: {A: remaining self-testable items already bounded; per-step alpha needs source change for one column, C: target claim not pinned to a protocol;
+      effect indistinguishable from zero and from shrinkage in our setup}
+  optional_parallel_offline: Phase 4B 10(a) rebuild V0/V3 from authors' public KS3 fit activations and compare
+outputs: [research/reproduction/phase6a_reproduction_gap_analysis.md, research/reproduction/experiments/phase6a_reproduction_gap_analysis.yaml]

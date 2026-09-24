@@ -1,0 +1,800 @@
+# Phase 4A reproduction sanity study (generated from analyze_phase4a.py output; see the .md report)
+experiment_id: phase4a_reproduction_sanity
+status: complete; analysis only beyond the runs; not committed
+paper: Contrastive Conceptor Activation Steering (COAST), arXiv:2605.17144
+branch: exp/coast-reproduction-sanity
+base_commit: 377838583d35b4c1a9c1bb013ab293efacfa7990
+code_changes: none in src/, scripts/, examples/, packages/; added research/reproduction/tools/analyze_phase4a.py only
+model: {policy: 'pi0.5 (pi05_libero, PyTorch)', checkpoint: checkpoints/openpi-libero-2000, max_steps: 520, replan_steps: 5}
+steering:
+  layer: 5
+  alpha: 0.5
+  strategy_coast: global
+  betas: [0.1, 0.2, 0.3]
+  shrinkage: h' = (1-beta) h (no conceptor)
+  adaptive_beta: false
+  tuned: false
+noise: {paired: true, master_seed: 100, key: '(master_seed, task_id, init_state, rollout_step)', preregistration: examples/libero_env/output/phase4a_servers/preregistration.txt
+    (gitignored)}
+conceptors:
+  task02: {file: conceptors/phase1b_repo_task02.npz, sha256: 8b1c802a62885352a84483f5c2ef600bcc0358f03cdf435f30e7492211ec80f3, builder: 'repository V0, fitted on
+      Phase 1A states 0-14 (8 success / 7 failure)'}
+  task03: {file: conceptors/phase4a_repo_task03.npz, sha256: 374e1b1929fa92a9fa97f906f61f9a728eab68c30fab82526941690d373ef6df, builder: 'experiments/libero/compute_conceptors.py
+      --layers 5 --alphas 0.5 --per_step_indices --task_filter <task3>; fitted on new seed-0 collection, states 0-14 (8 success / 7 failure)', builder_check: same
+      command on task 2 reproduces the phase1b NPZ keys bit-for-bit (4/4 arrays array_equal)}
+state_usage_task02: {0-14: Phase 1A collection = conceptor FITTING states; never behaviorally evaluated under steering before Phase 4A (in-sample for the conceptor),
+  15-29: 'development, Phases 1C-2B/1E (REUSED)', 30-44: 'held-out in Phase 3A (REUSED, no longer held-out)', 45-49: never used anywhere (strictly untouched; only
+    5 states), fresh_30_not_available: true}
+part1:
+  task: libero_10 task 2, KITCHEN_SCENE3_turn_on_the_stove_and_put_the_moka_pot_on_it
+  conditions: {A: baseline, B: 'coast_b01 (global, L5, a0.5, b0.1)', C: coast_b02, D: coast_b03, E: shrink_b01 (M=0.9I), F_added_control: shrink_b02 (M=0.8I), G_added_control: shrink_b03
+      (M=0.7I)}
+  state_sets:
+    P: {client_seed: 45, num_episodes: 20, states: 45-49 + 0-14, note: 'primary; subsets P_fresh=45-49, P_fit=0-14 (in-sample)'}
+    S: {client_seed: 15, num_episodes: 30, states: 15-44, note: 'REUSED states; exploratory only, not new evidence'}
+  commands: {server: 'CUDA_VISIBLE_DEVICES=1 uv run --no-sync scripts/serve_policy.py --pytorch --steer --noise-control --steering-diagnostics --conceptor-npz conceptors/phase1b_repo_task02.npz
+      --port 8104 policy:checkpoint --policy.config pi05_libero --policy.dir checkpoints/openpi-libero-2000', client_template: 'cd examples/libero_env && CUDA_VISIBLE_DEVICES=1
+      MUJOCO_GL=egl LIBERO_CONFIG_PATH=/home/stanley/Stanley_ws/COAST-research/libero_config_coast uv run --no-sync python main.py --task_suite_name libero_10 --task_id
+      2 --num_episodes {20|30} --seed {45|15} --port 8104 --policy_noise_seed 100 --output_dir output/phase4a_<cond>_task02_{P|S} [--steer --steering_layer 5 --steering_alpha
+      0.5 --steering_strategy {global|shrinkage} --steering_beta {0.1|0.2|0.3} --log_steering_diagnostics]', driver: examples/libero_env/output/phase4a_servers/run_clients.sh
+      (gitignored)}
+  noise_pairing:
+    P:
+      fingerprints_recomputed_and_matched: 9777
+      requests: {baseline: 1573, coast_b01: 1374, coast_b02: 1345, coast_b03: 1399, shrink_b01: 1482, shrink_b02: 1299, shrink_b03: 1305}
+      n_condition_pairs: 21
+      all_pairs_identical_at_every_shared_coordinate: true
+      shared_coordinates_min_max: [1026, 1367]
+      sample_step0: {baseline: 68c6cbb20a755d9c, coast_b01: 68c6cbb20a755d9c, coast_b02: 68c6cbb20a755d9c, coast_b03: 68c6cbb20a755d9c, shrink_b01: 68c6cbb20a755d9c,
+        shrink_b02: 68c6cbb20a755d9c, shrink_b03: 68c6cbb20a755d9c}
+    S:
+      fingerprints_recomputed_and_matched: 13846
+      requests: {baseline: 1973, coast_b01: 1946, coast_b02: 1873, coast_b03: 2202, shrink_b01: 1900, shrink_b02: 1917, shrink_b03: 2035}
+      n_condition_pairs: 21
+      all_pairs_identical_at_every_shared_coordinate: true
+      shared_coordinates_min_max: [1591, 1867]
+      sample_step0: {baseline: 87ae314ae03d4e54, coast_b01: 87ae314ae03d4e54, coast_b02: 87ae314ae03d4e54, coast_b03: 87ae314ae03d4e54, shrink_b01: 87ae314ae03d4e54,
+        shrink_b02: 87ae314ae03d4e54, shrink_b03: 87ae314ae03d4e54}
+  results:
+    P_all20:
+      n_states: 20
+      successes: {baseline: 9/20, coast_b01: 12/20, coast_b02: 12/20, coast_b03: 11/20, shrink_b01: 10/20, shrink_b02: 13/20, shrink_b03: 14/20}
+      vs_baseline:
+        coast_b01:
+          gain: 5
+          loss: 2
+          agree: 13
+          gain_states: [46, 47, 0, 9, 11]
+          loss_states: [5, 12]
+          mcnemar_p_reference_only: 0.453
+        coast_b02:
+          gain: 6
+          loss: 3
+          agree: 11
+          gain_states: [45, 46, 0, 7, 9, 11]
+          loss_states: [1, 5, 12]
+          mcnemar_p_reference_only: 0.508
+        coast_b03:
+          gain: 4
+          loss: 2
+          agree: 14
+          gain_states: [45, 46, 7, 9]
+          loss_states: [1, 13]
+          mcnemar_p_reference_only: 0.688
+        shrink_b01:
+          gain: 4
+          loss: 3
+          agree: 13
+          gain_states: [46, 47, 0, 9]
+          loss_states: [1, 5, 12]
+          mcnemar_p_reference_only: 1.0
+        shrink_b02:
+          gain: 6
+          loss: 2
+          agree: 12
+          gain_states: [45, 46, 49, 0, 7, 9]
+          loss_states: [1, 12]
+          mcnemar_p_reference_only: 0.289
+        shrink_b03:
+          gain: 6
+          loss: 1
+          agree: 13
+          gain_states: [45, 46, 49, 7, 10, 11]
+          loss_states: [1]
+          mcnemar_p_reference_only: 0.125
+      coast_vs_matched_beta_shrinkage:
+        coast_b01_vs_shrink_b01:
+          gain: 2
+          loss: 0
+          agree: 18
+          gain_states: [1, 11]
+          loss_states: []
+          mcnemar_p_reference_only: 0.5
+        coast_b02_vs_shrink_b02:
+          gain: 1
+          loss: 2
+          agree: 17
+          gain_states: [11]
+          loss_states: [49, 5]
+          mcnemar_p_reference_only: 1.0
+        coast_b03_vs_shrink_b03:
+          gain: 1
+          loss: 4
+          agree: 15
+          gain_states: [9]
+          loss_states: [49, 10, 11, 13]
+          mcnemar_p_reference_only: 0.375
+      coast_vs_shrink_b01:
+        coast_b01_vs_shrink_b01:
+          gain: 2
+          loss: 0
+          agree: 18
+          gain_states: [1, 11]
+          loss_states: []
+          mcnemar_p_reference_only: 0.5
+        coast_b02_vs_shrink_b01:
+          gain: 3
+          loss: 1
+          agree: 16
+          gain_states: [45, 7, 11]
+          loss_states: [47]
+          mcnemar_p_reference_only: 0.625
+        coast_b03_vs_shrink_b01:
+          gain: 4
+          loss: 3
+          agree: 13
+          gain_states: [45, 5, 7, 12]
+          loss_states: [47, 0, 13]
+          mcnemar_p_reference_only: 1.0
+    P_fresh_45_49:
+      n_states: 5
+      successes: {baseline: 1/5, coast_b01: 3/5, coast_b02: 3/5, coast_b03: 3/5, shrink_b01: 3/5, shrink_b02: 4/5, shrink_b03: 4/5}
+      vs_baseline:
+        coast_b01:
+          gain: 2
+          loss: 0
+          agree: 3
+          gain_states: [46, 47]
+          loss_states: []
+          mcnemar_p_reference_only: 0.5
+        coast_b02:
+          gain: 2
+          loss: 0
+          agree: 3
+          gain_states: [45, 46]
+          loss_states: []
+          mcnemar_p_reference_only: 0.5
+        coast_b03:
+          gain: 2
+          loss: 0
+          agree: 3
+          gain_states: [45, 46]
+          loss_states: []
+          mcnemar_p_reference_only: 0.5
+        shrink_b01:
+          gain: 2
+          loss: 0
+          agree: 3
+          gain_states: [46, 47]
+          loss_states: []
+          mcnemar_p_reference_only: 0.5
+        shrink_b02:
+          gain: 3
+          loss: 0
+          agree: 2
+          gain_states: [45, 46, 49]
+          loss_states: []
+          mcnemar_p_reference_only: 0.25
+        shrink_b03:
+          gain: 3
+          loss: 0
+          agree: 2
+          gain_states: [45, 46, 49]
+          loss_states: []
+          mcnemar_p_reference_only: 0.25
+      coast_vs_matched_beta_shrinkage:
+        coast_b01_vs_shrink_b01:
+          gain: 0
+          loss: 0
+          agree: 5
+          gain_states: []
+          loss_states: []
+          mcnemar_p_reference_only: 1.0
+        coast_b02_vs_shrink_b02:
+          gain: 0
+          loss: 1
+          agree: 4
+          gain_states: []
+          loss_states: [49]
+          mcnemar_p_reference_only: 1.0
+        coast_b03_vs_shrink_b03:
+          gain: 0
+          loss: 1
+          agree: 4
+          gain_states: []
+          loss_states: [49]
+          mcnemar_p_reference_only: 1.0
+      coast_vs_shrink_b01:
+        coast_b01_vs_shrink_b01:
+          gain: 0
+          loss: 0
+          agree: 5
+          gain_states: []
+          loss_states: []
+          mcnemar_p_reference_only: 1.0
+        coast_b02_vs_shrink_b01:
+          gain: 1
+          loss: 1
+          agree: 3
+          gain_states: [45]
+          loss_states: [47]
+          mcnemar_p_reference_only: 1.0
+        coast_b03_vs_shrink_b01:
+          gain: 1
+          loss: 1
+          agree: 3
+          gain_states: [45]
+          loss_states: [47]
+          mcnemar_p_reference_only: 1.0
+    P_fit_0_14:
+      n_states: 15
+      successes: {baseline: 8/15, coast_b01: 9/15, coast_b02: 9/15, coast_b03: 8/15, shrink_b01: 7/15, shrink_b02: 9/15, shrink_b03: 10/15}
+      vs_baseline:
+        coast_b01:
+          gain: 3
+          loss: 2
+          agree: 10
+          gain_states: [0, 9, 11]
+          loss_states: [5, 12]
+          mcnemar_p_reference_only: 1.0
+        coast_b02:
+          gain: 4
+          loss: 3
+          agree: 8
+          gain_states: [0, 7, 9, 11]
+          loss_states: [1, 5, 12]
+          mcnemar_p_reference_only: 1.0
+        coast_b03:
+          gain: 2
+          loss: 2
+          agree: 11
+          gain_states: [7, 9]
+          loss_states: [1, 13]
+          mcnemar_p_reference_only: 1.0
+        shrink_b01:
+          gain: 2
+          loss: 3
+          agree: 10
+          gain_states: [0, 9]
+          loss_states: [1, 5, 12]
+          mcnemar_p_reference_only: 1.0
+        shrink_b02:
+          gain: 3
+          loss: 2
+          agree: 10
+          gain_states: [0, 7, 9]
+          loss_states: [1, 12]
+          mcnemar_p_reference_only: 1.0
+        shrink_b03:
+          gain: 3
+          loss: 1
+          agree: 11
+          gain_states: [7, 10, 11]
+          loss_states: [1]
+          mcnemar_p_reference_only: 0.625
+      coast_vs_matched_beta_shrinkage:
+        coast_b01_vs_shrink_b01:
+          gain: 2
+          loss: 0
+          agree: 13
+          gain_states: [1, 11]
+          loss_states: []
+          mcnemar_p_reference_only: 0.5
+        coast_b02_vs_shrink_b02:
+          gain: 1
+          loss: 1
+          agree: 13
+          gain_states: [11]
+          loss_states: [5]
+          mcnemar_p_reference_only: 1.0
+        coast_b03_vs_shrink_b03:
+          gain: 1
+          loss: 3
+          agree: 11
+          gain_states: [9]
+          loss_states: [10, 11, 13]
+          mcnemar_p_reference_only: 0.625
+      coast_vs_shrink_b01:
+        coast_b01_vs_shrink_b01:
+          gain: 2
+          loss: 0
+          agree: 13
+          gain_states: [1, 11]
+          loss_states: []
+          mcnemar_p_reference_only: 0.5
+        coast_b02_vs_shrink_b01:
+          gain: 2
+          loss: 0
+          agree: 13
+          gain_states: [7, 11]
+          loss_states: []
+          mcnemar_p_reference_only: 0.5
+        coast_b03_vs_shrink_b01:
+          gain: 3
+          loss: 2
+          agree: 10
+          gain_states: [5, 7, 12]
+          loss_states: [0, 13]
+          mcnemar_p_reference_only: 1.0
+    S_all30_reused:
+      n_states: 30
+      successes: {baseline: 21/30, coast_b01: 20/30, coast_b02: 21/30, coast_b03: 16/30, shrink_b01: 21/30, shrink_b02: 21/30, shrink_b03: 19/30}
+      vs_baseline:
+        coast_b01:
+          gain: 4
+          loss: 5
+          agree: 21
+          gain_states: [21, 32, 37, 39]
+          loss_states: [15, 18, 22, 24, 34]
+          mcnemar_p_reference_only: 1.0
+        coast_b02:
+          gain: 5
+          loss: 5
+          agree: 20
+          gain_states: [21, 30, 32, 37, 38]
+          loss_states: [15, 17, 22, 23, 24]
+          mcnemar_p_reference_only: 1.0
+        coast_b03:
+          gain: 3
+          loss: 8
+          agree: 19
+          gain_states: [32, 37, 38]
+          loss_states: [15, 20, 22, 23, 24, 25, 29, 34]
+          mcnemar_p_reference_only: 0.227
+        shrink_b01:
+          gain: 3
+          loss: 3
+          agree: 24
+          gain_states: [32, 37, 39]
+          loss_states: [15, 18, 24]
+          mcnemar_p_reference_only: 1.0
+        shrink_b02:
+          gain: 5
+          loss: 5
+          agree: 20
+          gain_states: [21, 32, 33, 37, 38]
+          loss_states: [15, 17, 18, 22, 24]
+          mcnemar_p_reference_only: 1.0
+        shrink_b03:
+          gain: 5
+          loss: 7
+          agree: 18
+          gain_states: [21, 32, 37, 38, 42]
+          loss_states: [15, 22, 24, 31, 34, 40, 41]
+          mcnemar_p_reference_only: 0.774
+      coast_vs_matched_beta_shrinkage:
+        coast_b01_vs_shrink_b01:
+          gain: 1
+          loss: 2
+          agree: 27
+          gain_states: [21]
+          loss_states: [22, 34]
+          mcnemar_p_reference_only: 1.0
+        coast_b02_vs_shrink_b02:
+          gain: 2
+          loss: 2
+          agree: 26
+          gain_states: [18, 30]
+          loss_states: [23, 33]
+          mcnemar_p_reference_only: 1.0
+        coast_b03_vs_shrink_b03:
+          gain: 3
+          loss: 6
+          agree: 21
+          gain_states: [31, 40, 41]
+          loss_states: [20, 21, 23, 25, 29, 42]
+          mcnemar_p_reference_only: 0.508
+      coast_vs_shrink_b01:
+        coast_b01_vs_shrink_b01:
+          gain: 1
+          loss: 2
+          agree: 27
+          gain_states: [21]
+          loss_states: [22, 34]
+          mcnemar_p_reference_only: 1.0
+        coast_b02_vs_shrink_b01:
+          gain: 4
+          loss: 4
+          agree: 22
+          gain_states: [18, 21, 30, 38]
+          loss_states: [17, 22, 23, 39]
+          mcnemar_p_reference_only: 1.0
+        coast_b03_vs_shrink_b01:
+          gain: 2
+          loss: 7
+          agree: 21
+          gain_states: [18, 38]
+          loss_states: [20, 22, 23, 25, 29, 34, 39]
+          mcnemar_p_reference_only: 0.18
+    S_dev_15_29_reused:
+      n_states: 15
+      successes: {baseline: 13/15, coast_b01: 10/15, coast_b02: 9/15, coast_b03: 6/15, shrink_b01: 10/15, shrink_b02: 9/15, shrink_b03: 11/15}
+      vs_baseline:
+        coast_b01:
+          gain: 1
+          loss: 4
+          agree: 10
+          gain_states: [21]
+          loss_states: [15, 18, 22, 24]
+          mcnemar_p_reference_only: 0.375
+        coast_b02:
+          gain: 1
+          loss: 5
+          agree: 9
+          gain_states: [21]
+          loss_states: [15, 17, 22, 23, 24]
+          mcnemar_p_reference_only: 0.219
+        coast_b03:
+          gain: 0
+          loss: 7
+          agree: 8
+          gain_states: []
+          loss_states: [15, 20, 22, 23, 24, 25, 29]
+          mcnemar_p_reference_only: 0.016
+        shrink_b01:
+          gain: 0
+          loss: 3
+          agree: 12
+          gain_states: []
+          loss_states: [15, 18, 24]
+          mcnemar_p_reference_only: 0.25
+        shrink_b02:
+          gain: 1
+          loss: 5
+          agree: 9
+          gain_states: [21]
+          loss_states: [15, 17, 18, 22, 24]
+          mcnemar_p_reference_only: 0.219
+        shrink_b03:
+          gain: 1
+          loss: 3
+          agree: 11
+          gain_states: [21]
+          loss_states: [15, 22, 24]
+          mcnemar_p_reference_only: 0.625
+      coast_vs_matched_beta_shrinkage:
+        coast_b01_vs_shrink_b01:
+          gain: 1
+          loss: 1
+          agree: 13
+          gain_states: [21]
+          loss_states: [22]
+          mcnemar_p_reference_only: 1.0
+        coast_b02_vs_shrink_b02:
+          gain: 1
+          loss: 1
+          agree: 13
+          gain_states: [18]
+          loss_states: [23]
+          mcnemar_p_reference_only: 1.0
+        coast_b03_vs_shrink_b03:
+          gain: 0
+          loss: 5
+          agree: 10
+          gain_states: []
+          loss_states: [20, 21, 23, 25, 29]
+          mcnemar_p_reference_only: 0.062
+      coast_vs_shrink_b01:
+        coast_b01_vs_shrink_b01:
+          gain: 1
+          loss: 1
+          agree: 13
+          gain_states: [21]
+          loss_states: [22]
+          mcnemar_p_reference_only: 1.0
+        coast_b02_vs_shrink_b01:
+          gain: 2
+          loss: 3
+          agree: 10
+          gain_states: [18, 21]
+          loss_states: [17, 22, 23]
+          mcnemar_p_reference_only: 1.0
+        coast_b03_vs_shrink_b01:
+          gain: 1
+          loss: 5
+          agree: 9
+          gain_states: [18]
+          loss_states: [20, 22, 23, 25, 29]
+          mcnemar_p_reference_only: 0.219
+    S_heldout_30_44_reused:
+      n_states: 15
+      successes: {baseline: 8/15, coast_b01: 10/15, coast_b02: 12/15, coast_b03: 10/15, shrink_b01: 11/15, shrink_b02: 12/15, shrink_b03: 8/15}
+      vs_baseline:
+        coast_b01:
+          gain: 3
+          loss: 1
+          agree: 11
+          gain_states: [32, 37, 39]
+          loss_states: [34]
+          mcnemar_p_reference_only: 0.625
+        coast_b02:
+          gain: 4
+          loss: 0
+          agree: 11
+          gain_states: [30, 32, 37, 38]
+          loss_states: []
+          mcnemar_p_reference_only: 0.125
+        coast_b03:
+          gain: 3
+          loss: 1
+          agree: 11
+          gain_states: [32, 37, 38]
+          loss_states: [34]
+          mcnemar_p_reference_only: 0.625
+        shrink_b01:
+          gain: 3
+          loss: 0
+          agree: 12
+          gain_states: [32, 37, 39]
+          loss_states: []
+          mcnemar_p_reference_only: 0.25
+        shrink_b02:
+          gain: 4
+          loss: 0
+          agree: 11
+          gain_states: [32, 33, 37, 38]
+          loss_states: []
+          mcnemar_p_reference_only: 0.125
+        shrink_b03:
+          gain: 4
+          loss: 4
+          agree: 7
+          gain_states: [32, 37, 38, 42]
+          loss_states: [31, 34, 40, 41]
+          mcnemar_p_reference_only: 1.0
+      coast_vs_matched_beta_shrinkage:
+        coast_b01_vs_shrink_b01:
+          gain: 0
+          loss: 1
+          agree: 14
+          gain_states: []
+          loss_states: [34]
+          mcnemar_p_reference_only: 1.0
+        coast_b02_vs_shrink_b02:
+          gain: 1
+          loss: 1
+          agree: 13
+          gain_states: [30]
+          loss_states: [33]
+          mcnemar_p_reference_only: 1.0
+        coast_b03_vs_shrink_b03:
+          gain: 3
+          loss: 1
+          agree: 11
+          gain_states: [31, 40, 41]
+          loss_states: [42]
+          mcnemar_p_reference_only: 0.625
+      coast_vs_shrink_b01:
+        coast_b01_vs_shrink_b01:
+          gain: 0
+          loss: 1
+          agree: 14
+          gain_states: []
+          loss_states: [34]
+          mcnemar_p_reference_only: 1.0
+        coast_b02_vs_shrink_b01:
+          gain: 2
+          loss: 1
+          agree: 12
+          gain_states: [30, 38]
+          loss_states: [39]
+          mcnemar_p_reference_only: 1.0
+        coast_b03_vs_shrink_b01:
+          gain: 1
+          loss: 2
+          agree: 12
+          gain_states: [38]
+          loss_states: [34, 39]
+          mcnemar_p_reference_only: 1.0
+    ALL50_pooled_descriptive_only:
+      n_states: 50
+      successes: {baseline: 30/50, coast_b01: 32/50, coast_b02: 33/50, coast_b03: 27/50, shrink_b01: 31/50, shrink_b02: 34/50, shrink_b03: 33/50}
+      vs_baseline:
+        coast_b01:
+          gain: 9
+          loss: 7
+          agree: 34
+          gain_states: [0, 9, 11, 21, 32, 37, 39, 46, 47]
+          loss_states: [5, 12, 15, 18, 22, 24, 34]
+          mcnemar_p_reference_only: 0.804
+        coast_b02:
+          gain: 11
+          loss: 8
+          agree: 31
+          gain_states: [0, 7, 9, 11, 21, 30, 32, 37, 38, 45, 46]
+          loss_states: [1, 5, 12, 15, 17, 22, 23, 24]
+          mcnemar_p_reference_only: 0.648
+        coast_b03:
+          gain: 7
+          loss: 10
+          agree: 33
+          gain_states: [7, 9, 32, 37, 38, 45, 46]
+          loss_states: [1, 13, 15, 20, 22, 23, 24, 25, 29, 34]
+          mcnemar_p_reference_only: 0.629
+        shrink_b01:
+          gain: 7
+          loss: 6
+          agree: 37
+          gain_states: [0, 9, 32, 37, 39, 46, 47]
+          loss_states: [1, 5, 12, 15, 18, 24]
+          mcnemar_p_reference_only: 1.0
+        shrink_b02:
+          gain: 11
+          loss: 7
+          agree: 32
+          gain_states: [0, 7, 9, 21, 32, 33, 37, 38, 45, 46, 49]
+          loss_states: [1, 12, 15, 17, 18, 22, 24]
+          mcnemar_p_reference_only: 0.481
+        shrink_b03:
+          gain: 11
+          loss: 8
+          agree: 31
+          gain_states: [7, 10, 11, 21, 32, 37, 38, 42, 45, 46, 49]
+          loss_states: [1, 15, 22, 24, 31, 34, 40, 41]
+          mcnemar_p_reference_only: 0.648
+      coast_vs_matched_beta_shrinkage:
+        coast_b01_vs_shrink_b01:
+          gain: 3
+          loss: 2
+          agree: 45
+          gain_states: [1, 11, 21]
+          loss_states: [22, 34]
+          mcnemar_p_reference_only: 1.0
+        coast_b02_vs_shrink_b02:
+          gain: 3
+          loss: 4
+          agree: 43
+          gain_states: [11, 18, 30]
+          loss_states: [5, 23, 33, 49]
+          mcnemar_p_reference_only: 1.0
+        coast_b03_vs_shrink_b03:
+          gain: 4
+          loss: 10
+          agree: 36
+          gain_states: [9, 31, 40, 41]
+          loss_states: [10, 11, 13, 20, 21, 23, 25, 29, 42, 49]
+          mcnemar_p_reference_only: 0.18
+      coast_vs_shrink_b01:
+        coast_b01_vs_shrink_b01:
+          gain: 3
+          loss: 2
+          agree: 45
+          gain_states: [1, 11, 21]
+          loss_states: [22, 34]
+          mcnemar_p_reference_only: 1.0
+        coast_b02_vs_shrink_b01:
+          gain: 7
+          loss: 5
+          agree: 38
+          gain_states: [7, 11, 18, 21, 30, 38, 45]
+          loss_states: [17, 22, 23, 39, 47]
+          mcnemar_p_reference_only: 0.774
+        coast_b03_vs_shrink_b01:
+          gain: 6
+          loss: 10
+          agree: 34
+          gain_states: [5, 7, 12, 18, 38, 45]
+          loss_states: [0, 13, 20, 22, 23, 25, 29, 34, 39, 47]
+          mcnemar_p_reference_only: 0.454
+  intervention_by_condition_P:
+    coast_b01: {n_applications: 13740, mean_delta_norm: 16.96702, mean_relative_delta: 0.09942, mean_norm_ratio: 0.90062, mean_cosine_delta_hidden: -0.99961, mean_hidden_norm: 170.60041,
+      norm_ratio_sd: 0.00029}
+    coast_b02: {n_applications: 13450, mean_delta_norm: 34.43436, mean_relative_delta: 0.19905, mean_norm_ratio: 0.80102, mean_cosine_delta_hidden: -0.99972, mean_hidden_norm: 173.01007,
+      norm_ratio_sd: 0.00021}
+    coast_b03: {n_applications: 13990, mean_delta_norm: 52.46, mean_relative_delta: 0.29782, mean_norm_ratio: 0.7023, mean_cosine_delta_hidden: -0.99973, mean_hidden_norm: 176.13913,
+      norm_ratio_sd: 0.0004}
+    shrink_b01: {n_applications: 14820, mean_delta_norm: 17.34368, mean_relative_delta: 0.10163, mean_norm_ratio: 0.89838, mean_cosine_delta_hidden: -0.9999, mean_hidden_norm: 170.65465,
+      norm_ratio_sd: 0.00014}
+    shrink_b02: {n_applications: 12990, mean_delta_norm: 34.4633, mean_relative_delta: 0.19908, mean_norm_ratio: 0.80092, mean_cosine_delta_hidden: -0.99998, mean_hidden_norm: 173.10782,
+      norm_ratio_sd: 0.00011}
+    shrink_b03: {n_applications: 13050, mean_delta_norm: 53.01136, mean_relative_delta: 0.30068, mean_norm_ratio: 0.69932, mean_cosine_delta_hidden: -0.99999, mean_hidden_norm: 176.30265,
+      norm_ratio_sd: 7.0e-05}
+  intervention_by_condition_S:
+    coast_b01: {n_applications: 19460, mean_delta_norm: 16.96677, mean_relative_delta: 0.09942, mean_norm_ratio: 0.90062, mean_cosine_delta_hidden: -0.99961, mean_hidden_norm: 170.60051,
+      norm_ratio_sd: 0.00028}
+    coast_b02: {n_applications: 18730, mean_delta_norm: 34.43202, mean_relative_delta: 0.19905, mean_norm_ratio: 0.80102, mean_cosine_delta_hidden: -0.99972, mean_hidden_norm: 172.99904,
+      norm_ratio_sd: 0.00021}
+    coast_b03: {n_applications: 22020, mean_delta_norm: 52.45112, mean_relative_delta: 0.29782, mean_norm_ratio: 0.70229, mean_cosine_delta_hidden: -0.99973, mean_hidden_norm: 176.10522,
+      norm_ratio_sd: 0.00039}
+    shrink_b01: {n_applications: 19000, mean_delta_norm: 17.34664, mean_relative_delta: 0.10163, mean_norm_ratio: 0.89838, mean_cosine_delta_hidden: -0.9999, mean_hidden_norm: 170.68096,
+      norm_ratio_sd: 0.00014}
+    shrink_b02: {n_applications: 19170, mean_delta_norm: 34.45078, mean_relative_delta: 0.19909, mean_norm_ratio: 0.80092, mean_cosine_delta_hidden: -0.99998, mean_hidden_norm: 173.04408,
+      norm_ratio_sd: 0.00011}
+    shrink_b03: {n_applications: 20350, mean_delta_norm: 52.98243, mean_relative_delta: 0.30068, mean_norm_ratio: 0.69932, mean_cosine_delta_hidden: -0.99999, mean_hidden_norm: 176.20617,
+      norm_ratio_sd: 7.0e-05}
+  replicate_vs_earlier_phases:
+    phase2b_dev15_29:
+      baseline: {n: 15, same_outcome: 15, same_rollout_length: 15, successes_now: 13, successes_ref: 13}
+      coast_b01: {n: 15, same_outcome: 14, same_rollout_length: 14, successes_now: 10, successes_ref: 11}
+      shrink_b01: {n: 15, same_outcome: 15, same_rollout_length: 14, successes_now: 10, successes_ref: 10}
+    phase3a_heldout30_44:
+      baseline: {n: 15, same_outcome: 12, same_rollout_length: 7, successes_now: 8, successes_ref: 9}
+      coast_b01: {n: 15, same_outcome: 14, same_rollout_length: 5, successes_now: 10, successes_ref: 11}
+      shrink_b01: {n: 15, same_outcome: 14, same_rollout_length: 5, successes_now: 11, successes_ref: 10}
+part2:
+  task: libero_10 task 3, KITCHEN_SCENE4_put_the_black_bowl_in_the_bottom_drawer_of_the_cabinet_and_close_it
+  selection: repo-recorded baseline (results_2000_3000_9000.json) t3 = 0.33 (tied with t7; t9 0.20 too marginal for >=3/>=3 classes); tie-break lower task_id
+  collection: {seed: 0, states: 0-14, successes: 8, failures: 7, repo_recorded_baseline: 0.33, note: collection baseline 0.53 (unpaired noise) - not clearly harder
+      than task 2}
+  pilot:
+    client_seed: 15
+    num_episodes: 10
+    states: 15-24
+    conditions: [baseline, coast_b01, coast_b02]
+    server: CUDA_VISIBLE_DEVICES=0 uv run --no-sync scripts/serve_policy.py --pytorch --steer --noise-control --steering-diagnostics --conceptor-npz conceptors/phase4a_repo_task03.npz
+      --port 8105 policy:checkpoint --policy.config pi05_libero --policy.dir checkpoints/openpi-libero-2000
+    client: main.py --task_suite_name libero_10 --task_id 3 --num_episodes 10 --seed 15 --port 8105 --policy_noise_seed 100 [--steer --steering_layer 5 --steering_alpha
+      0.5 --steering_strategy global --steering_beta {0.1|0.2} --log_steering_diagnostics]
+  noise_pairing:
+    fingerprints_recomputed_and_matched: 2285
+    requests: {baseline: 920, coast_b01: 627, coast_b02: 738}
+    n_condition_pairs: 3
+    all_pairs_identical_at_every_shared_coordinate: true
+    shared_coordinates_min_max: [587, 688]
+    sample_step0: {baseline: 5911c4a5ff617e2c, coast_b01: 5911c4a5ff617e2c, coast_b02: 5911c4a5ff617e2c}
+  successes: {baseline: 5/10, coast_b01: 9/10, coast_b02: 6/10}
+  vs_baseline:
+    coast_b01:
+      gain: 4
+      loss: 0
+      agree: 6
+      gain_states: [15, 18, 19, 21]
+      loss_states: []
+      mcnemar_p_reference_only: 0.125
+    coast_b02:
+      gain: 3
+      loss: 2
+      agree: 5
+      gain_states: [18, 19, 21]
+      loss_states: [16, 24]
+      mcnemar_p_reference_only: 1.0
+  per_state_(state,success,steps):
+    baseline:
+    - [15, 0, 520]
+    - [16, 1, 428]
+    - [17, 0, 520]
+    - [18, 0, 520]
+    - [19, 0, 520]
+    - [20, 1, 465]
+    - [21, 0, 520]
+    - [22, 1, 470]
+    - [23, 1, 272]
+    - [24, 1, 358]
+    coast_b01:
+    - [15, 1, 296]
+    - [16, 1, 442]
+    - [17, 0, 520]
+    - [18, 1, 252]
+    - [19, 1, 251]
+    - [20, 1, 323]
+    - [21, 1, 188]
+    - [22, 1, 374]
+    - [23, 1, 226]
+    - [24, 1, 240]
+    coast_b02:
+    - [15, 0, 520]
+    - [16, 0, 520]
+    - [17, 0, 520]
+    - [18, 1, 215]
+    - [19, 1, 249]
+    - [20, 1, 409]
+    - [21, 1, 284]
+    - [22, 1, 228]
+    - [23, 1, 219]
+    - [24, 0, 520]
+  intervention_by_condition:
+    coast_b01: {n_applications: 6270, mean_delta_norm: 17.03757, mean_relative_delta: 0.09952, mean_norm_ratio: 0.90052, mean_cosine_delta_hidden: -0.9996, mean_hidden_norm: 171.14192,
+      norm_ratio_sd: 0.00027}
+    coast_b02: {n_applications: 7380, mean_delta_norm: 34.51529, mean_relative_delta: 0.199, mean_norm_ratio: 0.80107, mean_cosine_delta_hidden: -0.99971, mean_hidden_norm: 173.45829,
+      norm_ratio_sd: 0.00022}
+outputs: [research/reproduction/phase4a_reproduction_sanity.md, research/reproduction/experiments/phase4a_episode_results.csv (380 rows), research/reproduction/tools/analyze_phase4a.py]

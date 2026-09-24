@@ -1,0 +1,82 @@
+# Phase 5A Step 1: KS3 global reproduction (generated from analyze_phase5a_ks3.py output; see the .md report)
+experiment_id: phase5a_ks3_global_reproduction
+status: complete
+date: '2026-09-24'
+paper: Contrastive Conceptor Activation Steering (COAST), arXiv:2605.17144 v1
+question: Can the released COAST implementation reproduce the paper's KS3 global headline (L5, alpha 0.5, beta 0.1 = 28/30)?
+answer: 'Not in this run: 19/30 (reproduction gap -9). A measured gap under one interpretation of an under-specified protocol, not a statement that COAST fails.'
+repository: {branch: exp/ks3-global-reproduction, commit: 537f425587395d3b523647811e344e06d960fa41, upstream_base: 2afa10ee256a3b3edfeb56500fea166a0837f119, code_changes_to_src_scripts_examples_experiments: none}
+model: {policy: pi0.5 pi05_libero (PyTorch), checkpoint: checkpoints/openpi-libero-2000, hf_repo: brandonyang/openpi-libero-2000, hf_revision: aaeeabc72f8a, weights_hash_verified_against_authors: false}
+task: {suite: libero_10, task_id: 2, name: KITCHEN_SCENE3_turn_on_the_stove_and_put_the_moka_pot_on_it, paper_label: KS3, max_steps: 520, replan_steps: 5}
+steering:
+  strategy: global
+  layer: 5
+  alpha: 0.5
+  beta: 0.1
+  sweep: false
+  tuned: false
+  hook_built_per_server_log:
+  - ['''KITCHEN_SCENE3_turn_on_the_stove_and_put_the_moka_pot_on_it'', 5, 0.5, 0.1, ''global''', ConceptorSteeringHook]
+conceptor: {label: 'RELEASED implementation (V0: token-flattened, uncentered, repository Boolean AND); not the paper-mathematics builder V3', path: conceptors/libero_conceptors.npz,
+  sha256: 1ac8fceb11c71d8bc6c190b0563a82dc8dc572b269833502e26ffd7d8e82709c, bytes: 755065270, keys: 184, required_key: KITCHEN_SCENE3_turn_on_the_stove_and_put_the_moka_pot_on_it__L5__0.5__C_contrastive,
+  required_key_present: true, shared_keys_with_phase1b_npz: 92, shared_keys_bit_identical: 92, quota_trace_over_d: 0.0185, asymmetry_relative: 0.0847, committed: false}
+fit_split: {episodes: 15, seed: 0, init_states: 0-14, outcomes: 8 success / 7 failure, source: Phase 1A collection reused (not recollected), evaluated_here: false,
+  purpose: conceptor construction only}
+test_split: {episodes: 30, seed: 15, init_states: 15-44, interpretation: repository-compatible interpretation of the paper's 15 fit + 30 test split; the paper publishes
+    no seed or state IDs, fresh_to_researcher: false, selection_done_on_test: false}
+noise: {noise_control: false, policy_noise_seed: null, diagnostics: false, policy_sampling: unseeded default released path, paired_between_conditions: false}
+success_metric: 'LIBERO native success predicate as used by main.py: done = _check_success(); this LIBERO version exposes no info[''is_success'']; episode ends at
+  first success; failure = 520-step timeout'
+preregistration: {file: examples/libero_env/output/phase5a_ks3_servers/preregistration.txt (gitignored), written: '2026-09-24T18:42:35+0800', addendum: '2026-09-24T18:43:32+0800',
+  first_rollout: '2026-09-24T18:44:06+0800'}
+commands: {conceptor: CUDA_VISIBLE_DEVICES='' JAX_PLATFORMS=cpu uv run --no-sync python experiments/libero/compute_conceptors.py --activation_root activations/libero
+    --output_path conceptors/libero_conceptors.npz --task_filter KITCHEN_SCENE3_turn_on_the_stove_and_put_the_moka_pot_on_it, server: 'CUDA_VISIBLE_DEVICES=0 uv run
+    --no-sync scripts/serve_policy.py --pytorch --steer --conceptor-npz conceptors/libero_conceptors.npz --port 8301 policy:checkpoint --policy.config pi05_libero
+    --policy.dir checkpoints/openpi-libero-2000', client_baseline: cd examples/libero_env && CUDA_VISIBLE_DEVICES=0 MUJOCO_GL=egl LIBERO_CONFIG_PATH=/home/stanley/Stanley_ws/COAST-research/libero_config_coast
+    uv run --no-sync python main.py --task_suite_name libero_10 --task_id 2 --num_episodes 30 --seed 15 --port 8301 --output_dir output/phase5a_ks3_baseline_test_seed15,
+  client_coast: same as baseline with --output_dir output/phase5a_ks3_coast_global_L5_a0.5_b0.1_test_seed15 --steer --steering_layer 5 --steering_alpha 0.5 --steering_beta
+    0.1 --steering_strategy global}
+runs: {baseline: '2026-09-24T18:44:06+0800 to 18:50:02+0800, exit 0', coast: '2026-09-24T18:50:02+0800 to 18:55:50+0800, exit 0', server_error_lines: 0, hardware: 1x
+    RTX 4090 (GPU 0)}
+results:
+  baseline:
+    successes: 19
+    n: 30
+    rate: 0.633
+    wilson95: [0.455, 0.781]
+  coast_global_L5_a0.5_b0.1:
+    successes: 19
+    n: 30
+    rate: 0.633
+    wilson95: [0.455, 0.781]
+  paper_global:
+    successes: 28
+    n: 30
+    rate: 0.933
+    wilson95: [0.787, 0.982]
+  gap_to_paper_successes: -9
+  fisher_exact_ours_vs_paper_28_of_30: 0.0102
+  fisher_exact_baseline_vs_coast: 1.0
+  same_outcome_episodes: 16
+  both_succeed: 12
+  both_fail: 4
+  both_fail_states: [23, 33, 37, 40]
+  unpaired_transitions_baseline_to_coast:
+    fail_to_success: 7
+    success_to_fail: 7
+    gain_states: [17, 19, 21, 26, 28, 31, 32]
+    loss_states: [15, 20, 22, 30, 35, 36, 43]
+    mcnemar_exact_p_reference_only_NOT_PAIRED_NOISE: 1.0
+  mean_steps_when_both_succeed_baseline_coast: [250.9, 224.6]
+  pre_declared_reading_rule: {'>=24/30': consistent, <=20/30: inconsistent, 21-23/30: inconclusive, outcome: 'inconsistent band (19/30): reproduction gap measured,
+      not ''COAST fails'''}
+differences_from_paper: [test states and seeds unknown (interpretation used), 'conceptor construction: released V0 vs paper text V3', 'selection: none here (paper
+    config run directly) vs oracle on fit rollouts in the paper', policy noise unseeded here; paper silent, hardware RTX 4090 vs B200 cited for latency, LIBERO d63b117
+    / robosuite 1.4.0 / MuJoCo 3.2.3 vs paper silent]
+limitations: [unknown paper seeds and state IDs, unseeded policy noise; single unpaired run per condition, possible code-version differences (PR48 seed semantics
+    changed 2026-04-23), test states 15-44 reused from earlier phases, 'paper ''Base'' 0.53 appears to be the fit-set rate, not comparable to a test baseline', checkpoint
+    weights unverifiable against the authors', fit-state steered behaviour not evaluated by instruction]
+context_descriptive_only: {phase4a_same_config_states_15_44: 'baseline 21/30, COAST 20/30', phase3a_states_30_44: COAST 11/15}
+not_done_by_design: [sweep, tuning, V3 builder arm, shrinkage/random controls, improvements, commit/push]
+outputs: [research/reproduction/phase5a_ks3_global_reproduction.md, research/reproduction/experiments/phase5a_ks3_global_reproduction.yaml, research/reproduction/experiments/phase5a_ks3_episode_results.csv,
+  research/reproduction/tools/analyze_phase5a_ks3.py]

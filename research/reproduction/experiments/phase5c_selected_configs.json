@@ -1,0 +1,145 @@
+{
+  "phase": "5C",
+  "task": "KITCHEN_SCENE3_turn_on_the_stove_and_put_the_moka_pot_on_it",
+  "task_id": 2,
+  "conceptor_npz_sha256": "1ac8fceb11c71d8bc6c190b0563a82dc8dc572b269833502e26ffd7d8e82709c",
+  "fit_states": "0-14 (--seed 0 --num_episodes 15)",
+  "selection_rule": "per strategy: max fit successes; ties -> first in repository iteration order (layer asc, alpha asc, beta asc); no test data used",
+  "frozen": true,
+  "strategies": {
+    "global": {
+      "selected": {
+        "layer": 11,
+        "alpha": 0.5,
+        "beta": 0.3,
+        "condition": "global_L11_a0.5_b0.3"
+      },
+      "fit_success": 13,
+      "fit_n": 15,
+      "fit_rate": 0.867,
+      "tie_set_size": 1,
+      "tie_set": [
+        "global_L11_a0.5_b0.3"
+      ],
+      "n_configurations": 60,
+      "fit_success_distribution": {
+        "0": 0,
+        "1": 0,
+        "2": 0,
+        "3": 3,
+        "4": 2,
+        "5": 2,
+        "6": 4,
+        "7": 7,
+        "8": 8,
+        "9": 11,
+        "10": 8,
+        "11": 11,
+        "12": 3,
+        "13": 1,
+        "14": 0,
+        "15": 0
+      }
+    },
+    "positive_only": {
+      "selected": {
+        "layer": 0,
+        "alpha": 2.0,
+        "beta": 0.3,
+        "condition": "positive_only_L0_a2.0_b0.3"
+      },
+      "fit_success": 12,
+      "fit_n": 15,
+      "fit_rate": 0.8,
+      "tie_set_size": 3,
+      "tie_set": [
+        "positive_only_L0_a2.0_b0.3",
+        "positive_only_L0_a10.0_b0.1",
+        "positive_only_L17_a1.0_b0.5"
+      ],
+      "n_configurations": 60,
+      "fit_success_distribution": {
+        "0": 0,
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 1,
+        "5": 1,
+        "6": 4,
+        "7": 10,
+        "8": 17,
+        "9": 13,
+        "10": 9,
+        "11": 2,
+        "12": 3,
+        "13": 0,
+        "14": 0,
+        "15": 0
+      }
+    },
+    "per_step": {
+      "selected": {
+        "layer": 5,
+        "alpha": 1.0,
+        "beta": 0.3,
+        "condition": "per_step_L5_a1.0_b0.3"
+      },
+      "fit_success": 11,
+      "fit_n": 15,
+      "fit_rate": 0.733,
+      "tie_set_size": 2,
+      "tie_set": [
+        "per_step_L5_a1.0_b0.3",
+        "per_step_L11_a1.0_b0.3"
+      ],
+      "n_configurations": 12,
+      "fit_success_distribution": {
+        "0": 0,
+        "1": 0,
+        "2": 0,
+        "3": 1,
+        "4": 0,
+        "5": 1,
+        "6": 0,
+        "7": 0,
+        "8": 1,
+        "9": 3,
+        "10": 4,
+        "11": 2,
+        "12": 0,
+        "13": 0,
+        "14": 0,
+        "15": 0
+      },
+      "note": "repository per_step: alpha fixed at 1.0; paper per-step alpha axis (KS3 oracle alpha 10) not expressible"
+    }
+  },
+  "fit_baselines": [
+    {
+      "strategy_shard": "phase5c_sweep_global_L0_5",
+      "fit_success": 10,
+      "fit_rate": 0.667
+    },
+    {
+      "strategy_shard": "phase5c_sweep_global_L11_17",
+      "fit_success": 5,
+      "fit_rate": 0.333
+    },
+    {
+      "strategy_shard": "phase5c_sweep_positive_only_L0_5",
+      "fit_success": 4,
+      "fit_rate": 0.267
+    },
+    {
+      "strategy_shard": "phase5c_sweep_positive_only_L11_17",
+      "fit_success": 11,
+      "fit_rate": 0.733
+    },
+    {
+      "strategy_shard": "phase5c_sweep_per_step",
+      "fit_success": 6,
+      "fit_rate": 0.4
+    }
+  ],
+  "frozen_at": "2026-09-24T23:55:18+08:00"
+}

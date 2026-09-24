@@ -1,0 +1,5 @@
+condition,selected_configuration,layer,alpha,beta,fit_success,fit_n,test_success,test_n,test_rate,wilson95_lo,wilson95_hi,paper_test_success,gap_to_paper,fisher_p_vs_paper,reading_vs_paper,delta_vs_our_test_baseline,fisher_p_vs_our_test_baseline
+baseline,none (unsteered),,,,,,17,30,0.567,0.392,0.726,,,,,,
+global,global_L11_a0.5_b0.3,11,0.5,0.3,13,15,21,30,0.7,0.521,0.833,28,-7,0.0419,inconsistent,4,0.422
+positive_only,positive_only_L0_a2.0_b0.3,0,2.0,0.3,12,15,17,30,0.567,0.392,0.726,24,-7,0.0946,inconclusive,0,1.0
+per_step,per_step_L5_a1.0_b0.3,5,1.0,0.3,11,15,15,30,0.5,0.332,0.668,26,-11,0.0048,inconsistent,-2,0.7961

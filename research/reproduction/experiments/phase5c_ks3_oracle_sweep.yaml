@@ -1,0 +1,121 @@
+# Phase 5C: KS3 paper-style oracle selection reproduction (see ../phase5c_ks3_oracle_sweep.md)
+experiment_id: phase5c_ks3_oracle_sweep
+status: complete
+date: '2026-09-25'
+paper: Contrastive Conceptor Activation Steering (COAST), arXiv:2605.17144 v1
+question: With the paper's oracle selection procedure (15 fit rollouts -> grid -> per-strategy best -> 30 test rollouts), does the released implementation reproduce KS3 Table 4?
+answer: 'No in this run: global 21/30 (paper 28), positive_only 17/30 (paper 24), per_step alpha=1.0 15/30 (paper 26 at alpha 10); unsteered test baseline 17/30;
+  no selected config distinguishable from baseline. Measured gap under one protocol interpretation, not a statement that COAST fails.'
+interpretation_case: 'case 3 (baseline-like) for positive_only and per_step; global between case 2 and case 3 (+4 vs same-run baseline, +2 vs Phase 5A fixed config,
+  within our unsteered run-to-run range 17-21/30)'
+repository: {branch: exp/ks3-oracle-sweep, commit: e84c39932a18cc183279466b38766a898d6f831a, code_changes_to_src_scripts_examples_experiments: none}
+model: {policy: pi0.5 pi05_libero (PyTorch), checkpoint: checkpoints/openpi-libero-2000, hf_repo: brandonyang/openpi-libero-2000}
+task: {suite: libero_10, task_id: 2, name: KITCHEN_SCENE3_turn_on_the_stove_and_put_the_moka_pot_on_it, paper_label: KS3, max_steps: 520, replan_steps: 5}
+conceptor:
+  label: 'RELEASED implementation (V0: token-flattened, uncentered, repository Boolean AND); not the paper-mathematics builder V3'
+  path: conceptors/libero_conceptors.npz
+  sha256: 1ac8fceb11c71d8bc6c190b0563a82dc8dc572b269833502e26ffd7d8e82709c
+  keys: 184
+  key_layout: 4 layers x 5 alphas x {C_success, C_failure, C_contrastive}; per-step 0-9 per layer (alpha 1.0); 4 linear directions
+  built_from: fit states 0-14 (8 success / 7 failure), Phase 5A, experiments/libero/compute_conceptors.py defaults
+  committed: false
+fit_split: {episodes: 15, seed: 0, init_states: 0-14, use: conceptor construction and oracle selection}
+test_split: {episodes: 30, seed: 15, init_states: 15-44, use: evaluation only after freeze, fresh_to_researcher: false}
+noise: {noise_control: false, policy_noise_seed: null, diagnostics: false, paired_between_conditions: false}
+preregistration: {file: examples/libero_env/output/phase5c_servers/preregistration.txt (gitignored), written: '2026-09-24T19:50:49+0800'}
+selection:
+  rule: per strategy (never across strategies) highest fit successes of 15; ties -> first in repository iteration order (layer asc, alpha asc, beta asc); full
+    tie set reported; no test data used
+  frozen_file: research/reproduction/experiments/phase5c_selected_configs.json
+  frozen_at: '2026-09-24T23:55:18+08:00'
+  frozen_sha256: 3de5e4e26a63c2c69d7a4c76bdcf489a9913c9b4d98bf68c802e280cf4a98904
+  first_test_rollout: '2026-09-24T23:56:27+0800'
+grid:
+  layers: [0, 5, 11, 17]
+  alphas: [0.1, 0.5, 1.0, 2.0, 10.0]
+  betas: [0.1, 0.3, 0.5]
+  global: {configurations: 60, status: complete}
+  positive_only: {configurations: 60, status: complete}
+  per_step: {configurations: 12, alpha: 1.0, status: complete, note: 'paper per-step alpha axis (KS3 oracle alpha 10) not expressible without source change:
+      builder per_step_alpha=1.0 (conceptors.py:380), hook ignores alpha, find_best_configs.py collapses alpha axis'}
+  linear: {configurations_planned: 20, configurations_completed: 12, status: interrupted and excluded before any test rollout, in_table4: false}
+  selection_eligible_configurations: 132
+commands:
+  sweep_shard: 'CUDA_VISIBLE_DEVICES=<gpu> uv run --no-sync python experiments/libero/find_best_configs.py --tasks KITCHEN_SCENE3_turn_on_the_stove_and_put_the_moka_pot_on_it
+    --num_episodes 15 --seed 0 --betas 0.1 0.3 0.5 --port <port> --output_dir examples/libero_env/output/phase5c_sweep_<name> --best_configs_path examples/libero_env/output/phase5c_sweep_<name>/best_configs.json
+    --strategies <s> --layers <layers> --alphas <alphas>'
+  shards:
+    global_L0_5: --strategies global --layers 0 5 --alphas 0.1 0.5 1.0 2.0 10.0
+    global_L11_17: --strategies global --layers 11 17 --alphas 0.1 0.5 1.0 2.0 10.0
+    positive_only_L0_5: --strategies positive_only --layers 0 5 --alphas 0.1 0.5 1.0 2.0 10.0
+    positive_only_L11_17: --strategies positive_only --layers 11 17 --alphas 0.1 0.5 1.0 2.0 10.0
+    per_step: --strategies per_step --layers 0 5 11 17 --alphas 1.0
+    linear: --strategies linear --layers 0 5 11 17 --alphas 0.1 0.5 1.0 2.0 10.0
+  test_server: CUDA_VISIBLE_DEVICES=<gpu> uv run --no-sync scripts/serve_policy.py --pytorch --steer --conceptor-npz conceptors/libero_conceptors.npz --port <8511|8512>
+    policy:checkpoint --policy.config pi05_libero --policy.dir checkpoints/openpi-libero-2000
+  test_client: cd examples/libero_env && CUDA_VISIBLE_DEVICES=<gpu> MUJOCO_GL=egl uv run --no-sync python main.py --task_suite_name libero_10 --task_id 2 --num_episodes
+    30 --seed 15 --port <port> --output_dir output/phase5c_test_<condition> [--steer --steering_layer L --steering_alpha A --steering_beta B --steering_strategy S]
+  analysis: CUDA_VISIBLE_DEVICES="" JAX_PLATFORMS=cpu uv run --no-sync python research/reproduction/tools/analyze_phase5c_oracle.py {select <strategy>|freeze|test}
+compute:
+  hardware: 2x RTX 4090
+  rollouts: {global_sweep: 930, positive_only_sweep: 930, per_step_sweep: 195, linear_partial: 195, test: 120, total: 2370}
+  wall: {global: 19:51-21:27, positive_only: 21:27-23:05, per_step: 23:05-23:45, test: 23:56-00:09}
+fit_results:
+  csv: research/reproduction/experiments/phase5c_fit_results.csv
+  video_log_agreement: all 132 configurations
+  global:
+    selected: {layer: 11, alpha: 0.5, beta: 0.3, fit_success: 13, fit_rate: 0.867}
+    tie_set: [global_L11_a0.5_b0.3]
+    mean_fit_success: 8.55
+    paper_config_fit: {config: L5 a0.5 b0.1, fit_success: 9, configs_scoring_higher: 23}
+    distribution: {3: 3, 4: 2, 5: 2, 6: 4, 7: 7, 8: 8, 9: 11, 10: 8, 11: 11, 12: 3, 13: 1}
+  positive_only:
+    selected: {layer: 0, alpha: 2.0, beta: 0.3, fit_success: 12, fit_rate: 0.8}
+    tie_set: [positive_only_L0_a2.0_b0.3, positive_only_L0_a10.0_b0.1, positive_only_L17_a1.0_b0.5]
+    mean_fit_success: 8.4
+    paper_config_fit: {config: L11 a1.0 b0.1, fit_success: 8, configs_scoring_higher: 27}
+    distribution: {4: 1, 5: 1, 6: 4, 7: 10, 8: 17, 9: 13, 10: 9, 11: 2, 12: 3}
+  per_step:
+    selected: {layer: 5, alpha: 1.0, beta: 0.3, fit_success: 11, fit_rate: 0.733}
+    tie_set: [per_step_L5_a1.0_b0.3, per_step_L11_a1.0_b0.3]
+    mean_fit_success: 8.75
+    paper_config_fit: {config: L5 a10 b0.3, fit_success: not expressible}
+    distribution: {3: 1, 5: 1, 8: 1, 9: 3, 10: 4, 11: 2}
+  mean_fit_by_beta: {global: {0.1: 9.1, 0.3: 9.7, 0.5: 6.85}, positive_only: {0.1: 8.2, 0.3: 8.35, 0.5: 8.65}, per_step: {0.1: 9.0, 0.3: 10.5, 0.5: 6.75}}
+  fit_state_baselines: {global_L0_5: 10, global_L11_17: 5, positive_only_L0_5: 4, positive_only_L11_17: 11, per_step: 6, linear_partial: 7, pooled_first_five: 36/75,
+    binomial_dispersion_chi2: 10.4, df: 4, p: 0.035}
+  null_max_check:
+    method: max of m iid Binomial(15, pooled steered fit rate)
+    global: {m: 60, p: 0.57, expected_max: 12.75, observed_max: 13, p_max_ge_observed: 0.61, dispersion_chi2: 93.8, df: 59, dispersion_p: 0.0027}
+    positive_only: {m: 60, p: 0.56, expected_max: 12.63, observed_max: 12, p_max_ge_observed: 0.95, dispersion_chi2: 42.3, df: 59, dispersion_p: 0.95}
+    per_step: {m: 12, p: 0.583, expected_max: 11.75, observed_max: 11, p_max_ge_observed: 0.91, dispersion_chi2: 17.6, df: 11, dispersion_p: 0.091}
+test_results:
+  csv: research/reproduction/experiments/phase5c_test_results.csv
+  episode_csv: research/reproduction/experiments/phase5c_test_episode_results.csv
+  hooks_built_per_server_log: ['(KS3, 11, 0.5, 0.3, global)', '(KS3, 0, 2.0, 0.3, positive_only)', '(KS3, 5, 0.0, 0.3, per_step) [alpha zeroed in cache key by
+      design]']
+  server_error_lines: 0
+  baseline: {test_success: 17, test_n: 30, test_rate: 0.567, wilson95: [0.392, 0.726]}
+  global: {selected: L11 a0.5 b0.3, fit: 13/15, test_success: 21, test_rate: 0.7, wilson95: [0.521, 0.833], paper: 28, gap: -7, fisher_vs_paper: 0.0419, reading: inconsistent,
+    delta_vs_baseline: 4, fisher_vs_baseline: 0.422, fit_to_test_drop: 0.167}
+  positive_only: {selected: L0 a2.0 b0.3, fit: 12/15, test_success: 17, test_rate: 0.567, wilson95: [0.392, 0.726], paper: 24, gap: -7, fisher_vs_paper: 0.0946,
+    reading: inconclusive, delta_vs_baseline: 0, fisher_vs_baseline: 1.0, fit_to_test_drop: 0.233}
+  per_step: {selected: L5 a1.0 b0.3, fit: 11/15, test_success: 15, test_rate: 0.5, wilson95: [0.332, 0.668], paper: 26, paper_alpha: 10, gap: -11, fisher_vs_paper: 0.0048,
+    reading: 'inconsistent (not like for like: alpha 1.0 vs 10)', delta_vs_baseline: -2, fisher_vs_baseline: 0.7961, fit_to_test_drop: 0.233}
+  reading_rule: consistent = inside paper Wilson 95% of k_p/30; inconsistent = Fisher two-sided p < 0.05 vs k_p/30; otherwise inconclusive
+  our_unsteered_runs_on_states_15_44: {phase4a: 21, phase5a: 19, phase5c: 17, pooled: 57/90, fisher_global_21_vs_pooled: 0.66}
+paper_table4_ks3: {global: '28/30 (L5 a0.5 b0.1)', per_step: '26/30 (L5 a10 b0.3)', positive_only: '24/30 (L11 a1 b0.1)'}
+difference_analysis:
+- selected fit maxima are consistent with no configuration effect (winner's curse); fit-to-test drops 0.17-0.23
+- only structured grid effect is harm at beta 0.5 (global, per_step); positive_only fit scores under-dispersed
+- test states do not separate steered from unsteered (our unsteered range 17-21/30)
+- paper-selected configs are mid-ranked on our fit states
+- 'unresolved causes: unknown paper states/seeds, paper selection noise, V0 vs V3 builder, code version (PR48, per-step alpha axis absent), per-step alpha 1 vs 10,
+  env/checkpoint versions, run-level non-determinism'
+limitations: [one unseeded unpaired run per test condition (SD ~0.09), single 15-episode draw per fit configuration, test states reused from Phases 4A/5A, fit states
+    are both conceptor data and selection data, linear interrupted and excluded, per_step restricted to alpha 1.0, fit baselines over-dispersed]
+tool_fix: 'analyze_phase5c_oracle.py cmd_test: summary dict aliased the CSV row (extra keys broke DictWriter); now copies the row; no result affected'
+not_done_by_design: [tuning beyond paper grid, source changes, V3 builder arm, per-step alpha axis, other LIBERO tasks, contacting authors, commit/push]
+outputs: [research/reproduction/phase5c_ks3_oracle_sweep.md, research/reproduction/experiments/phase5c_ks3_oracle_sweep.yaml, research/reproduction/experiments/phase5c_fit_results.csv,
+  research/reproduction/experiments/phase5c_selected_configs.json, research/reproduction/experiments/phase5c_test_results.csv, research/reproduction/experiments/phase5c_test_episode_results.csv,
+  research/reproduction/tools/analyze_phase5c_oracle.py]

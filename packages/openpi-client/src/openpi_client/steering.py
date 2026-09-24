@@ -62,12 +62,15 @@ STEERING_DIAGNOSTICS_KEY = "steering_diagnostics"
 #   random_matched  — h' = (1-β)h + β(h @ C_rand.T), C_rand has same spectrum
 #                     as C_contrastive at α but random eigenvectors
 #   linear          — h' = h + α · v, v = unit(mean_success - mean_failure). β ignored.
+#   shrinkage       — research ablation: h' = (1-β)h, i.e. ``global`` with the
+#                     conceptor replaced by 0. No conceptor is read; α ignored.
 ALLOWED_STRATEGIES = (
     "global",
     "per_step",
     "positive_only",
     "random_matched",
     "linear",
+    "shrinkage",
 )
 
 

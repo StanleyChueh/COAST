@@ -36,6 +36,7 @@ def test_allowed_strategies_expected_set():
         "positive_only",
         "random_matched",
         "linear",
+        "shrinkage",
     }
 
 

@@ -61,6 +61,7 @@ _SUMMARY_FIELDS = {
     "max_relative_delta",
     "mean_hidden_norm",
     "mean_cosine_delta_hidden",
+    "mean_norm_ratio",
 }
 _CONCEPTOR_RECORD_FIELDS = {"layer", "denoising_step", "beta"} | _SUMMARY_FIELDS
 _MAGNITUDE_FIELDS = (
@@ -97,6 +98,8 @@ def test_summary_matches_independent_numpy_computation():
     assert summary["mean_relative_delta"] == pytest.approx((delta / h_norm).mean(), rel=1e-6)
     assert summary["max_relative_delta"] == pytest.approx((delta / h_norm).max(), rel=1e-6)
     assert summary["mean_hidden_norm"] == pytest.approx(h_norm.mean(), rel=1e-6)
+    ratio = np.linalg.norm(h_steered.reshape(-1, _D), axis=-1) / h_norm
+    assert summary["mean_norm_ratio"] == pytest.approx(ratio.mean(), rel=1e-6)
     d = (h_steered - h).reshape(-1, _D)
     cosine = (d * h.reshape(-1, _D)).sum(-1) / (delta * h_norm)
     assert summary["mean_cosine_delta_hidden"] == pytest.approx(cosine.mean(), rel=1e-5, abs=1e-6)
@@ -108,6 +111,7 @@ def test_summary_cosine_identifies_pure_shrinkage():
     summary = intervention_summary(h, 0.9 * h)
     assert summary["mean_cosine_delta_hidden"] == pytest.approx(-1.0, abs=1e-6)
     assert summary["mean_relative_delta"] == pytest.approx(0.1, rel=1e-5)
+    assert summary["mean_norm_ratio"] == pytest.approx(0.9, rel=1e-5)
 
 
 def test_summary_of_bf16_tensors_measures_realized_delta():
@@ -125,6 +129,7 @@ def test_summary_zero_hidden_state_is_finite():
     summary = intervention_summary(h, h.clone())
     assert all(math.isfinite(summary[k]) for k in _MAGNITUDE_FIELDS)
     assert summary["mean_relative_delta"] == 0.0
+    assert summary["mean_norm_ratio"] == 1.0
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -4,6 +4,7 @@ This module is the single source of truth for steering primitives:
 
     ConceptorSteeringHook      PyTorch forward hook h' = (1-β)h + β(C @ h)
     LinearSteeringHook         PyTorch forward hook h' = h + α · v
+    ShrinkageSteeringHook      Research ablation h' = (1-β)h (global with C = 0; reads no conceptor)
     SteeredPolicyWrapper       Policy wrapper dispatching on an obs["__steering__"] key
     load_conceptor_npz         Load the pre-computed conceptor .npz
     get_conceptor_matrix       Look up a (task, layer, alpha, strategy) conceptor
@@ -347,6 +348,7 @@ def intervention_summary(h: torch.Tensor, h_steered: torch.Tensor) -> dict[str, 
     ``h_steered - h`` is the realized modification after the model's dtype cast.
     ``mean_cosine_delta_hidden`` is the mean per-token cos(h_steered - h, h):
     -1 means the intervention only shrinks h along itself, 0 means it is orthogonal to h.
+    ``mean_norm_ratio`` is the mean per-token ||h_steered|| / ||h|| (hidden-state norm change).
     """
     d = h.shape[-1]
     h32 = h.detach().to(torch.float32).reshape(-1, d)
@@ -357,10 +359,20 @@ def intervention_summary(h: torch.Tensor, h_steered: torch.Tensor) -> dict[str, 
     tiny = torch.finfo(torch.float32).tiny
     relative = delta_norm / h_norm.clamp_min(tiny)
     cosine = (delta * h32).sum(dim=-1) / (delta_norm * h_norm).clamp_min(tiny)
+    # A zero token stays zero under both hooks' matrix path, so its ratio is defined as 1.
+    norm_ratio = torch.where(h_norm > 0, torch.linalg.vector_norm(h32 + delta, dim=-1) / h_norm.clamp_min(tiny), 1.0)
     stats = torch.stack(
-        [delta_norm.mean(), delta_norm.max(), relative.mean(), relative.max(), h_norm.mean(), cosine.mean()]
+        [
+            delta_norm.mean(),
+            delta_norm.max(),
+            relative.mean(),
+            relative.max(),
+            h_norm.mean(),
+            cosine.mean(),
+            norm_ratio.mean(),
+        ]
     )
-    mean_delta, max_delta, mean_rel, max_rel, mean_h, mean_cos = stats.tolist()  # one device sync
+    mean_delta, max_delta, mean_rel, max_rel, mean_h, mean_cos, mean_ratio = stats.tolist()  # one device sync
     return {
         "token_count": int(h32.shape[0]),
         "hidden_dim": int(d),
@@ -370,6 +382,7 @@ def intervention_summary(h: torch.Tensor, h_steered: torch.Tensor) -> dict[str, 
         "max_relative_delta": max_rel,
         "mean_hidden_norm": mean_h,
         "mean_cosine_delta_hidden": mean_cos,
+        "mean_norm_ratio": mean_ratio,
     }
 
 
@@ -473,6 +486,46 @@ class ConceptorSteeringHook:
             return f"ConceptorSteeringHook(dim={d}, beta={self.beta}, per_step={len(self._Ms)})"
         d = self.M.shape[0]
         return f"ConceptorSteeringHook(dim={d}, beta={self.beta})"
+
+
+class ShrinkageSteeringHook(ConceptorSteeringHook):
+    """Research ablation (strategy ``shrinkage``): ``global`` steering with the conceptor set to 0.
+
+    M = (1-β)I + β·C_ablation with C_ablation = 0, i.e. M = (1-β)I, so h' = (1-β)h:
+    the hidden-state contraction of ``global`` at the same β without the
+    conceptor's direction. M is built through the parent's ``_build_M`` and
+    applied by the parent's forward (same dtype cast, same diagnostics). No
+    conceptor is read: M is built on the first call from h's hidden dim.
+    """
+
+    def __init__(
+        self,
+        beta: float = 0.3,
+        device: str = "cuda",
+        *,
+        layer: int | None = None,
+        record_diagnostics: bool = False,
+    ) -> None:
+        # 0x0 placeholder satisfies the parent's argument check; M is rebuilt for h's hidden dim on first call.
+        super().__init__(
+            np.zeros((0, 0), dtype=np.float32),
+            beta=beta,
+            device=device,
+            layer=layer,
+            record_diagnostics=record_diagnostics,
+        )
+        self.M = None
+
+    def __call__(self, module, input, output):
+        h = output[0] if isinstance(output, tuple) else output
+        d = h.shape[-1]
+        if self.M is None or self.M.shape[0] != d:
+            self.M = self._build_M(np.zeros((d, d), dtype=np.float32))
+            logger.info("Shrinkage ablation: M = (1 - beta) I = %r * I (d=%d); no conceptor used", 1.0 - self.beta, d)
+        return super().__call__(module, input, output)
+
+    def __repr__(self) -> str:
+        return f"ShrinkageSteeringHook(beta={self.beta}, M=(1-beta)I)"
 
 
 def compute_random_conceptor(d: int = 1024, alpha: float = 0.5, seed: int = 42) -> np.ndarray:
@@ -661,10 +714,11 @@ class SteeredPolicyWrapper:
           fixed α=1.0 via `get_per_step_conceptor_matrices`, which takes only
           task+layer) → alpha zeroed so (per_step, α=0.1, β=0.3) and
           (per_step, α=1.0, β=0.3) share a hook.
+        - `shrinkage` uses only beta (M = (1-β)I, no conceptor) → alpha zeroed.
         - everything else keys on both alpha and beta.
         """
         strategy = payload["strategy"]
-        alpha = 0.0 if strategy == "per_step" else float(payload["alpha"])
+        alpha = 0.0 if strategy in ("per_step", "shrinkage") else float(payload["alpha"])
         beta = 0.0 if strategy == "linear" else float(payload["beta"])
         return (payload["task"], int(payload["layer"]), alpha, beta, strategy)
 
@@ -701,6 +755,9 @@ class SteeredPolicyWrapper:
                     random_seed=seed,
                 )
                 hook = ConceptorSteeringHook(C, beta=float(payload["beta"]), device=self._device)
+            elif strategy == "shrinkage":
+                # Research ablation: M = (1-β)I. Reads nothing from the NPZ; α is unused.
+                hook = ShrinkageSteeringHook(beta=float(payload["beta"]), device=self._device)
             elif strategy == "per_step":
                 # Load all 10 per-step conceptors, build a list of 10 M_t matrices
                 # aligned to the pi0.5 sampler's step counter 0..9. α is unused

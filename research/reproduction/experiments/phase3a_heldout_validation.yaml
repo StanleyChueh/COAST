@@ -1,0 +1,155 @@
+# Phase 3A: held-out validation — baseline vs shrinkage vs real COAST (global, V0) vs random matched.
+# HELD-OUT SPLIT (seed 30, init states 30-44). No Phase 3A result uses states 15-29.
+# Report: research/reproduction/phase3a_heldout_validation.md
+
+experiment_id: phase3a_heldout_validation_task02_seed30_L5_a0.5_b0.1_noise100
+timestamp: "2026-09-24T11:29:17+08:00"  # server launch; clients 11:29:54-11:41:10
+paper: "Contrastive Conceptor Activation Steering (COAST): Unlocking Vision-Language-Action Models through Hidden States"
+arxiv_id: "2605.17144"
+commit: a5c8763a32f891781a6c2d7ce2706faa130bbf41  # Phase 2B
+branch: exp/heldout-validation
+code_state: "clean working tree (no code changes); analysis script added afterwards"
+split: heldout
+init_states: [30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44]
+dev_states_15_29_used_for_results: false  # appear only as the Phase 2B comparison (item 5)
+preregistration: "examples/libero_env/output/phase3a_servers/preregistration.txt (11:29:12, before any Phase 3A rollout): order A->B->C->D, one run each, no reruns"
+
+pre_run_checks:
+  git_status: clean
+  git_head: a5c8763a32f891781a6c2d7ce2706faa130bbf41
+  nvidia_smi: {gpu0: "447 MiB, 0%", gpu1: "173 MiB, 11%", used: 1}
+  conceptor_npz: {path: conceptors/phase1b_repo_task02.npz, exists: true, bytes: 377532646, sha256: 8b1c802a62885352a84483f5c2ef600bcc0358f03cdf435f30e7492211ec80f3}
+  random_matched_determinism: {processes: 2, seed: 1466119911, same_as_phase2b: true, C_random_sha256_prefix: 9f133892cb5a48b5, identical: true}
+  init_state_mapping: "episode k -> initial_states[(seed + k) % 50]; --seed 30 -> 30..44"
+  split_side_effect: "--seed also sets env.seed(30) and np.random.seed(30) (dev used 15); identical across all held-out conditions"
+
+model: pi0.5
+policy_config: pi05_libero
+backend: pytorch
+checkpoint: checkpoints/openpi-libero-2000
+task_suite: libero_10
+task_id: 2
+task_name: KITCHEN_SCENE3_turn_on_the_stove_and_put_the_moka_pot_on_it
+env_seed: 30
+num_episodes: 15
+max_steps: 520
+replan_steps: 5
+noise_control: {enabled: true, master_seed: 100, shape: [10, 32], key: "(master_seed, task_id, init_state, rollout_step)"}
+physical_gpu_id: 1  # RTX 4090, one server process for all four conditions
+
+conditions:
+  A_baseline: {payload: none, M: "I"}
+  B_shrinkage: {strategy: shrinkage, layer: 5, beta: 0.1, M: "0.9 I"}
+  C_real_coast: {strategy: global, layer: 5, alpha: 0.5, beta: 0.1, M: "0.9 I + 0.1 C_real", conceptor_key: "KITCHEN_SCENE3_turn_on_the_stove_and_put_the_moka_pot_on_it__L5__0.5__C_contrastive"}
+  D_random_matched: {strategy: random_matched, layer: 5, alpha: 0.5, beta: 0.1, M: "0.9 I + 0.1 C_random", seed: 1466119911}
+tuning: none
+reruns: none
+
+server_command: >-
+  CUDA_VISIBLE_DEVICES=1 uv run --no-sync scripts/serve_policy.py --pytorch --steer --noise-control --steering-diagnostics
+  --conceptor-npz conceptors/phase1b_repo_task02.npz --port 8103 policy:checkpoint --policy.config pi05_libero --policy.dir checkpoints/openpi-libero-2000
+client_command:
+  common: >-
+    CUDA_VISIBLE_DEVICES=1 MUJOCO_GL=egl LIBERO_CONFIG_PATH=/home/stanley/Stanley_ws/COAST-research/libero_config_coast
+    uv run --no-sync python main.py --task_suite_name libero_10 --task_id 2 --num_episodes 15 --seed 30 --port 8103
+    --policy_noise_seed 100 --output_dir output/phase3a_<cond>_task02_seed30
+  steer: "--steer --steering_layer 5 --steering_alpha 0.5 --steering_beta 0.1 --log_steering_diagnostics --steering_strategy <strategy>"
+  driver: examples/libero_env/output/phase3a_servers/run_clients.sh
+  wall: {A: "11:29:54-11:32:56", B: "11:32:56-11:35:47", C: "11:35:47-11:38:27", D: "11:38:27-11:41:10"}
+analysis_command: 'CUDA_VISIBLE_DEVICES="" JAX_PLATFORMS=cpu uv run python research/reproduction/tools/analyze_phase3a.py'
+analysis_self_check: "same code on Phase 2B outputs reproduces 13/10/11/11, 3676 fingerprints, C-D 15/15"
+
+noise_validation:
+  fingerprints_recomputed_and_matched: 3845
+  requests: {A: 1051, B: 967, C: 905, D: 922}
+  init_states_seen: "exactly 30..44"
+  per_episode_schedule: "rollout steps 0,5,...<steps; count = ceil(steps/5)"
+  shared_coordinates_identical: {A_B: [947, 947], A_C: [902, 902], A_D: [920, 920], B_C: [887, 887], B_D: [842, 842], C_D: [844, 844]}
+  sample_init30_step0: e1f45eb191a4dc86  # identical in all four conditions
+  per_episode_fingerprint_counts:
+    A_baseline:       [104, 44, 47, 104, 44, 51, 46, 43, 104, 104, 51, 104, 104, 53, 48]
+    B_shrinkage:      [104, 45, 42, 104, 44, 42, 46, 39, 104, 31, 46, 104, 104, 45, 67]
+    C_real_coast:     [104, 46, 39, 104, 44, 45, 47, 37, 104, 36, 47, 50, 104, 52, 46]
+    D_random_matched: [104, 45, 41, 104, 45, 44, 46, 42, 53, 104, 46, 50, 104, 46, 48]
+  heldout_dev_coordinate_overlap: none  # keys differ by init_state; cross-split comparison is unpaired
+  diagnostics: "B 9670 / C 9050 / D 9220 hook applications; 10 per call, steps 0..9, layer 5, 10 tokens, dim 1024, beta 0.1, correct strategy + init_state, finite; schedule == fingerprint schedule"
+  rollout_step0_identical_hidden_norm_at_denoising_step0: "15/15 for every steered pair"
+
+results:
+  success:
+    A_baseline: {successes: 9, rate: 0.6, wilson95: [0.357, 0.802]}
+    B_shrinkage: {successes: 10, rate: 0.667, wilson95: [0.417, 0.848]}
+    C_real_coast: {successes: 11, rate: 0.733, wilson95: [0.48, 0.891]}
+    D_random_matched: {successes: 11, rate: 0.733, wilson95: [0.48, 0.891]}
+  episode_level:  # order = init states 30..44
+    A_baseline:       [0, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1, 1]
+    B_shrinkage:      [0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1]
+    C_real_coast:     [0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1]
+    D_random_matched: [0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1]
+    rollout_steps:
+      A_baseline:       [520, 220, 232, 520, 216, 251, 228, 211, 520, 520, 255, 520, 520, 264, 239]
+      B_shrinkage:      [520, 224, 210, 520, 216, 210, 226, 193, 520, 154, 230, 520, 520, 224, 334]
+      C_real_coast:     [520, 230, 194, 520, 216, 222, 232, 181, 520, 177, 235, 250, 520, 259, 229]
+      D_random_matched: [520, 223, 201, 520, 225, 217, 229, 209, 264, 520, 230, 247, 520, 226, 238]
+    csv: research/reproduction/experiments/phase3a_episode_results.csv
+  transitions:
+    baseline_to_coast: {fail_to_success: 2, success_to_fail: 0, agreement: 13, identical_length: 5, mcnemar_exact_p_reference_only: 0.5, gained: [39, 41]}
+    baseline_to_shrinkage: {fail_to_success: 1, success_to_fail: 0, agreement: 14, identical_length: 6, mcnemar_exact_p_reference_only: 1.0, gained: [39]}
+    baseline_to_random_matched: {fail_to_success: 2, success_to_fail: 0, agreement: 13, identical_length: 4, mcnemar_exact_p_reference_only: 0.5, gained: [38, 41]}
+    coast_vs_shrinkage: {agreement: 14, disagreement_states: [41], coast_only_success: [41], shrinkage_only_success: [], identical_length: 5, mcnemar_exact_p_reference_only: 1.0}
+    coast_vs_random_matched: {agreement: 13, disagreement_states: [38, 39], random_only_success: [38], coast_only_success: [39], identical_length: 3, mcnemar_exact_p_reference_only: 1.0}
+    shrinkage_vs_random_matched: {agreement: 12, disagreement_states: [38, 39, 41], identical_length: 4}
+    all_four_success: 9
+    all_four_failure: 3  # states 30, 33, 42
+    steered_all_agree: 12
+    steered_odd_one_out: {"38": random_matched, "39": random_matched, "41": shrinkage}
+  intervention_magnitude_layer5:  # per hook application
+    B_shrinkage: {n: 9670, mean_delta_norm: 17.347, sd: 2.691, min: 13.096, max: 24.612, mean_relative_delta: 0.10163, cosine: -0.99990, norm_ratio: 0.89838, mean_hidden_norm: 170.68}
+    C_real_coast: {n: 9050, mean_delta_norm: 16.974, sd: 2.668, min: 12.760, max: 24.130, mean_relative_delta: 0.09942, cosine: -0.99961, norm_ratio: 0.90062, mean_hidden_norm: 170.67}
+    D_random_matched: {n: 9220, mean_delta_norm: 16.691, sd: 2.598, min: 12.590, max: 23.658, mean_relative_delta: 0.09782, cosine: -0.99850, norm_ratio: 0.90234, mean_hidden_norm: 170.62}
+    by_denoising_step_mean_delta_norm:
+      B_shrinkage: [22.757, 20.336, 19.059, 18.170, 17.538, 16.481, 15.848, 15.132, 14.360, 13.786]
+      C_real_coast: [22.316, 19.943, 18.681, 17.801, 17.173, 16.126, 15.492, 14.777, 14.009, 13.424]
+      D_random_matched: [21.914, 19.579, 18.346, 17.488, 16.876, 15.856, 15.240, 14.550, 13.808, 13.255]
+    paired_shared_coordinates:
+      shrinkage_vs_coast: {n: 8870, delta_norm_ratio: 1.0227, norm_ratio_diff: -0.00224}
+      shrinkage_vs_random_matched: {n: 8420, delta_norm_ratio: 1.0399, norm_ratio_diff: -0.00396}
+      coast_vs_random_matched: {n: 8440, delta_norm_ratio: 1.0169, norm_ratio_diff: -0.00172}
+    rollout_step0_max_abs_rel_hidden_norm_diff: {shrinkage_vs_coast: 0.00115, shrinkage_vs_random_matched: 0.00184, coast_vs_random_matched: 0.00118}
+
+comparison_with_phase2b_dev:  # dev = init states 15-29, same config/seed; unpaired across splits
+  successes:
+    dev: {A: 13, B: 10, C: 11, D: 11}
+    heldout: {A: 9, B: 10, C: 11, D: 11}
+  baseline_to_coast: {dev: "+1 -3 (p 0.625)", heldout: "+2 -0 (p 0.5)"}
+  baseline_to_shrinkage: {dev: "+0 -3", heldout: "+1 -0"}
+  baseline_to_random_matched: {dev: "+1 -3", heldout: "+2 -0"}
+  coast_vs_shrinkage_agreement: {dev: 14, heldout: 14}
+  coast_vs_random_agreement: {dev: 15, heldout: 13}
+  steered_all_agree: {dev: 14, heldout: 12}
+  steered_odd_one_out: {dev: {"21": shrinkage}, heldout: {"38": random_matched, "39": random_matched, "41": shrinkage}}
+  norm_ratio: {dev: [0.89838, 0.90062, 0.90233], heldout: [0.89838, 0.90062, 0.90234]}  # B, C, D
+  pooled_descriptive_30_states: {A: 22, B: 20, C: 22, D: 22, baseline_to_coast: "+3 -3", coast_vs_shrinkage: 28, coast_vs_random: 28}
+  real_coast_sole_outlier_states_of_30: 0
+
+conclusions:  # bounded to this held-out task/configuration
+  q1_coast_improves_unseen_states: "Not demonstrated: 9 -> 11 (+2 -0, p 0.5); sign reversed vs dev (13 -> 11); shrinkage/random show the same held-out gains-only pattern; within baseline noise-seed spread (7-13)."
+  q2_shrinkage_explains_coast: "Yes, as on dev: 14/15 agreement; hidden-state contraction identical to dev (0.8984 vs 0.9006); the one disagreement (41) is shared by random matched."
+  q3_random_matched_like_real: "Largely: 13/15 (dev 15/15); disagreements symmetric (38 random+, 39 random-), real COAST sides with shrinkage in both; no direction-specific effect."
+  mechanism_survives: true
+  mechanism_statement: "At L5/beta=0.1, COAST acts as a state-independent ~10% contraction of h along h; shrinkage and a spectrum-matched random conceptor reproduce its behavior up to single-state divergences not specific to C_real. Across 30 states real COAST is never the sole outlier."
+  not_concluded: ["COAST works (small, split-reversing success differences)", "COAST is useless (one task/configuration)"]
+
+runtime: {clients_total: "~11 min"}
+vram: {gpu1_peak_mib: 8347, gpu1_peak_util_pct: 100, source: examples/libero_env/output/phase3a_servers/gpu1_vram.csv}
+errors: none  # 0 Traceback/ERROR server lines; all clients CLIENT_EXIT=0
+warnings: ["robosuite private macro file notice", "LIBERO datasets path does not exist (not needed for eval)"]
+housekeeping: "outputs (~62 MB) gitignored, not committed; server and GPU logger stopped; ~/Stanley_ws/lerobot untouched; no activations collected; no code/checkpoint/NPZ changes"
+
+limitations:
+  - "Small N: 15 held-out episodes per condition, one master noise seed, one run each, one random basis."
+  - "Single task, layer 5, beta 0.1, alpha 0.5, V0 conceptor."
+  - "--seed 30 also changes env.seed / np.random.seed vs dev; affects cross-split comparison only."
+  - "No held-out replay; steered-path cross-process jitter limits interpretation of single-state disagreements."
+  - "Not magnitude-matched: contraction 10.16% / 9.94% / 9.78% (B/C/D)."
+  - "Measured at the hooked layer only."

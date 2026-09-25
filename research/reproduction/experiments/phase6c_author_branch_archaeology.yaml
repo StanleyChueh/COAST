@@ -1,0 +1,115 @@
+# Phase 6C — Author-branch archaeology (pi0.5 LIBERO-10, KS3)
+# Evidence tags: P = paper, R = public git history, M = measured by us, I = inference.
+phase: 6C
+date: 2026-09-25
+question: >
+  Can any public COAST branch, historical commit, script or committed artifact reconstruct the
+  pipeline that generated the pi0.5 LIBERO numbers in Tables 1 and 4 (KS3: global 0.93, per-step 0.87, pos-only 0.80)?
+
+repo_state:
+  research_branch: exp/author-branch-archaeology
+  base_sha: bbb31c89cd2182e5d36ac2fd06fe117698c42193
+  clean_at_start: true
+  upstream: https://github.com/COAST-VLA/COAST.git
+  fetch: "git fetch upstream --prune (no changes); PR heads fetched read-only to refs/archaeology/pr/*"
+  upstream_refs_modified: false
+  branches_inventoried: 22
+  pr_heads_searched: 50
+  inventory_file: research/reproduction/experiments/phase6c_branch_matrix.csv
+
+paper_source: "arXiv:2605.17144v1 HTML (fetched 2026-09-25); tables parsed programmatically"
+
+key_findings:
+  generator_pipeline:
+    branch: upstream/miranda-v2
+    introduced: 2fdc5ad (2026-04-13) experiments/pi05_libero/src/{conceptor_steering,positive_only_steering}.py
+    reporting: ec62cad (2026-04-21) experiments/shared/oracle_gap_table.py, experiments/make_45ep_latex.py
+    evidence:
+      - "[P/R] Table 15 caption = oracle_gap_table.py LaTeX f-string (same wording, same benchmark order)"
+      - "[P/R] 'up to 152 configurations per task' = 135 steered + 9 random + 8 pos_only in the src sweep"
+      - "[P/R] Table 15 LIBERO Selected Grid 18 = oracle_gap_table count at L11, a{0.5,1}, b{0.1,0.3} over src condition names"
+      - "[P/R] Per-step KS3 'alpha=10' = loop label in per_step_{0|9}_L5_a10.0_b0.3; alpha unused for per-step"
+      - "[P/R] All 10 pos-only cells within src grid L{5,11} x a{0.5,1} x b{0.1,0.3}"
+      - "[P/M] Table 4: 30/30 per-task cells are k/15; P(all even | N=30) = 4.0e-9; P(all div by 3 | N=45) = 3.9e-14"
+      - "[P/M] Control: Table 8 (pi0-FAST MetaWorld, 16 envs) values are k/16 (108/115)"
+      - "[P] Table 17 = Table 4 Global column"
+    protocol_of_that_code:
+      client_states: "initial_states[episode], episodes 0..14 (pre-PR#48); seed does not select state; env.seed(7)"
+      fit_states: "0-14 (authors' HF fit data episode_000..014; 8S/7F)"
+      eval_states: "0-14 (same as fit)"
+      episodes_per_condition: 15
+      reporting: "oracle = max success_rate over conditions in summary.json (same rollouts)"
+      per_step: "per_step_0/per_step_9: one fixed conceptor (ds 0 or 9, alpha 1.0) applied at all steps"
+      builder_public: "for_subin/build_conceptors.py @29059a5: token mean-pool, centered, C_s(I-C_f), ds 0 only, per-step alpha 1.0"
+      builder_actual_2026_04_13: unknown (not public)
+      checkpoint: "/vast/.../openpi-metaworld/checkpoints/pi05_libero/libero_b200_bs512/2000 (identity with HF openpi-libero-2000 unverified; released config documents the same fsdp_devices=4 tweak on the same day)"
+  exact_public_match_to_paper_text: none
+  committed_libero_steering_results: none (any branch or PR head)
+  committed_libero_numbers: "examples/libero_env/figures/results_2000_3000_9000.json (unsteered, 15 ep/task; ckpt 2000 KS3 0.47)"
+  per_step_alpha_10: "not generable as a real alpha-10 per-step conceptor by any public code; label-only in miranda-v2 src"
+
+targeted_execution:
+  justified: "C1 materially closer than main to the pipeline behind Table 4/15 numbers"
+  worktree: /home/stanley/Stanley_ws/COAST-research/COAST-paper-candidate
+  sha: 29059a537ce123abdab7a4e164db0c72eeff8024
+  worktree_git_status: "clean (ignored: examples/libero_env/.venv symlink, __pycache__)"
+  gpu: "CUDA_VISIBLE_DEVICES=0 (RTX 4090), single GPU"
+  code_modified: false
+  adaptations:
+    - checkpoint path -> checkpoints/openpi-libero-2000 (HF rev aaeeabc72f8a...; conversion hash matched, no re-conversion)
+    - OPENPI_DATA_HOME -> scratch dir (paligemma tokenizer copied)
+    - LIBERO_CONFIG_PATH=/home/stanley/Stanley_ws/COAST-research/libero_config_coast
+    - ports 8770-8773; output dirs in scratch
+    - SLURM script -> local bash; uv run -> existing root/libero venvs with PYTHONPATH=<worktree>/src:<worktree>/packages/openpi-client/src
+    - examples/libero_env/.venv in worktree symlinked to our libero venv (identical pyproject/uv.lock)
+  invocation: "driver CLI restricted to KS3 Table-4 cells; driver adds baseline + native random control"
+  fit_data: "brandonyang/pi05-libero-activations-v1-2000-15env@3e3a8fe22222b1b96124a059f9c964ff2ac9f0c0, KS3 suffix_residual only (1141 files) -> activations/ (gitignored)"
+  builder_output: "312 arrays; n(s,f)=(413,728) at ds 0; L5 overlap(a1)=0.978, L11=0.901"
+  failed_attempts:
+    - {attempt: 1, cause: "tokenizer symlink outside OPENPI_DATA_HOME rejected by download.py", rollouts: 0}
+    - {attempt: 2, cause: "LIBERO_CONFIG_PATH not exported -> LIBERO interactive prompt EOF", rollouts: 0, cleanup: "removed empty ~/.libero it created"}
+  states_evaluated: "0-14 for every condition"
+  results:
+    - {run: run1, condition: baseline, successes: 11, n: 15}
+    - {run: run1, condition: global_L5_a0.5_b0.1, successes: 13, n: 15, paper_native: "14/15"}
+    - {run: run1, condition: random_L5_b0.1, successes: 11, n: 15}
+    - {run: run2a, condition: baseline, successes: 10, n: 15}
+    - {run: run2a, condition: global_L5_a0.5_b0.1, successes: 12, n: 15, paper_native: "14/15"}
+    - {run: run2a, condition: random_L5_b0.1, successes: 12, n: 15}
+    - {run: run2b, condition: baseline, successes: 12, n: 15}
+    - {run: run2b, condition: per_step_0_L5_a10.0_b0.3, successes: 9, n: 15, paper_native: "13/15"}
+    - {run: run2b, condition: per_step_9_L5_a10.0_b0.3, successes: 9, n: 15, paper_native: "13/15"}
+    - {run: run2b, condition: random_L5_b0.3, successes: 8, n: 15}
+    - {run: run2c, condition: pos_only_L11_a1.0_b0.1, successes: 7, n: 15, paper_native: "12/15"}
+  pooled: {baseline: "33/45", global: "25/30", random_b0.1: "23/30", per_step: "18/30"}
+  fisher_p: {global_vs_baseline: 0.403, global_vs_random: 0.748, global_vs_paper_native: 0.647, per_step_vs_paper_native: 0.094, pos_only_vs_paper_native: 0.128}
+  order_statistics_independent_approx:
+    global_45cfg_p0.73_P_max_ge_14: 0.933
+    per_step_90names_p0.60_P_max_ge_13: 0.916
+    pos_only_8cfg_p0.60_P_max_ge_12: 0.532
+  offline_operator_L5_a0.5_b0.1: {rel_dh: 0.097, cos_dh_h: -0.9996, quota_Cc: 0.0041, per_step_0_equals_global_a1: true, overlap_L11_a10: 0.739}
+  per_episode_file: research/reproduction/experiments/phase6c_candidate_test_results.csv
+  outcome_extraction: "video length (530 frames = timeout); equals driver success_rate for all 11 conditions"
+
+interpretation:
+  case: "A (qualified) with D elements"
+  statement: >
+    The closest publicly available author-development pipeline, run under its native evaluation semantics
+    (15 rollouts on the fitting init states 0-14), gives 12-13/15 for the KS3 global configuration, close to the
+    reported 14/15 (=0.93). Same-state unsteered and random-conceptor runs give 10-12/15, so this value is not
+    evidence of a steering gain. The released main implementation does not reproduce the reported KS3 result under
+    our documented held-out protocol (Phases 5A/5C).
+
+stop_condition_answers:
+  closest_public_pipeline: "upstream/miranda-v2 src sweep (2fdc5ad; executed at 29059a5) + shared/oracle_gap_table.py (ec62cad)"
+  exact_paper_match: "no"
+  reproduces_ks3_28_of_30: "not as 28/30 held-out (the code has no 30-episode held-out path); its native equivalent 14/15 is approximately reproduced (13/15, 12/15)"
+  missing_information: [per-condition summary.json, Apr-13 NPZ builder/NPZ, checkpoint identity, 45-episode rerun outputs, noise seeding/runs per cell, whether any 30-rollout held-out run backs Tables 1/4]
+  contact_authors_justified: "yes (questions in phase6c_author_branch_archaeology.md §10; not sent)"
+
+not_done:
+  - no author contact
+  - no method changes, no cherry-picks into research branch
+  - no commits, no pushes
+  - full 152-condition candidate sweep not run
+  - other nine LIBERO tasks not run

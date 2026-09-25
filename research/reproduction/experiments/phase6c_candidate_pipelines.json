@@ -1,0 +1,148 @@
+{
+  "phase": "6C",
+  "question": "Which public branch/commit is closest to the pipeline that generated the pi0.5 LIBERO numbers in Tables 1 and 4?",
+  "evidence_tags": {
+    "P": "paper arXiv:2605.17144v1 HTML",
+    "R": "public git history",
+    "M": "measured by us",
+    "I": "our inference"
+  },
+  "candidates": [
+    {
+      "id": "C1",
+      "rank": 1,
+      "name": "miranda-v2 src sweep pipeline (experiments/pi05_libero/src + shared/oracle_gap_table.py)",
+      "branch": "upstream/miranda-v2",
+      "commit": "2fdc5ad (2026-04-13, pipeline introduced); 29059a5 (2026-04-15, same pipeline + first public NPZ builder); d5ae9c8 (HEAD, 2026-05-02)",
+      "executed_sha": "29059a537ce123abdab7a4e164db0c72eeff8024",
+      "role_for_table4": "likely generator of the Table 4 / Table 15 LIBERO numbers (strong circumstantial + textual evidence); does NOT implement the paper's stated fit/test protocol",
+      "evidence_for": [
+        "[P/R] Paper Table 15 caption is a near-verbatim rendering of the f-string in experiments/shared/oracle_gap_table.py (same wording, same benchmark order GR00T RoboCasa; pi0.5 RoboCasa; pi0.5 LIBERO, 'All benchmarks use beta in {0.1,0.3}')",
+        "[P/R] Paper Table 15 'Selected Grid = 18' for pi0.5 LIBERO equals the count oracle_gap_table.py produces from the src condition names at L11, alpha{0.5,1.0}, beta{0.1,0.3}: 4 global + 8 per_step_{0,9} (alpha-replicated) + 4 pos_only + 2 random",
+        "[P/R] Paper A.10.2 'up to 152 configurations per task' equals the src sweep: 3 layers x 5 alphas x 3 betas x 3 strategies (135) + 9 random + 8 pos_only = 152",
+        "[P/R] Paper Table 4 per-step KS3 'alpha=10' matches src condition naming per_step_{0|9}_L5_a10.0_b0.3, where alpha is a loop label and is NOT used to build or select the per-step conceptor",
+        "[P/R] All 10 positive-only cells of Table 4 lie in the src positive-only grid L{5,11} x alpha{0.5,1.0} x beta{0.1,0.3} (the paper's Table 14 grid would allow 60 cells)",
+        "[P/R] Table 4 caption 'layer sweep in {5,11}' vs src grids layers [5,11,17] (global/per-step) and [5,11] (positive-only)",
+        "[P/M] All 30 per-task Table 4 cells are multiples of 1/15; P(all numerators even | N=30) = 4.0e-9; consistent with the src NUM_EPISODES=15",
+        "[P/R] Table 17 (per-task oracle hyperparameters) equals Table 4 Global column, consistent with best-by-prefix from a single summary.json",
+        "[R] Author cluster paths (/vast/projects/ungar/stellar/miaom/openpi-new) and B200 SLURM scripts; dates 2026-04-13..05-02, i.e. before May submission"
+      ],
+      "evidence_against_or_gaps": [
+        "[R] The builder that produced $OPENPI_DATA_HOME/libero_conceptors.npz for the 2026-04-13 sweep is not public; for_subin/build_conceptors.py (2026-04-15) is described as the 'packaged version of the same pipeline' but differs at least in per-step coverage (all 10 steps vs 0 and 9)",
+        "[R] Steering checkpoint path is /vast/.../openpi-metaworld/checkpoints/pi05_libero/libero_b200_bs512/2000 (Miranda's own run, train_libero.sh 2026-04-09); fit activations metadata names checkpoints/openpi-libero-2000/. Identity with HF brandonyang/openpi-libero-2000 is plausible (released config documents the same fsdp_devices=4 tweak, same day) but unverified",
+        "[R] steering_results/ and steering_results_45ep/ summary.json files, selected_params.json, and oracle_gap_table outputs are gitignored/off-repo; none committed on any branch",
+        "[R] No mechanism for held-out LIBERO states: pre-PR#48 client uses initial_states[episode]; driver passes no seed/offset; 15 episodes => states 0-14 = the fit states"
+      ],
+      "components": {
+        "checkpoint": "libero_b200_bs512/2000 (UNKNOWN identity vs HF openpi-libero-2000)",
+        "client_state_semantics": "initial_states[episode], episode 0..N-1; env.seed(7); seed does not select state",
+        "fit_split": "authors' fit activations: 15 episodes episode_000..014 (states 0-14 under the pre-#48 client), KS3 8S/7F",
+        "test_split": "none separate; steered eval = 15 episodes on states 0-14 (same states as fit, fresh unseeded policy noise)",
+        "token_pooling": "mean over 10 action tokens (for_subin builder; Apr-13 builder unknown)",
+        "centering": "centered R (for_subin builder)",
+        "contrastive_formula": "C_s @ (I - C_f) (for_subin builder)",
+        "global_aggregation": "denoising step 0 only (main_ds=0) (for_subin builder)",
+        "per_step": "strategies per_step_0 / per_step_9 = one fixed conceptor from ds 0 or 9 at alpha 1.0 applied at every step (ConceptorSteeringHook ignores step); alpha in name is a loop label",
+        "steering_gate": "forward hook on gemma_expert layer L output, h' = h @ M.T, M=(1-b)I + bC, all suffix (action) tokens, all 10 denoising steps",
+        "search_grid": "global/per_step_0/per_step_9: L{5,11,17} x a{0.1,0.5,1,2,10} x b{0.1,0.3,0.5}; pos_only L{5,11} x a{0.5,1} x b{0.1,0.3}; random L x b",
+        "evaluation_count": "15 per condition, one run, unseeded noise",
+        "reporting": "oracle = max success over conditions in the task's summary.json (same 15 rollouts); summary sorted by SR desc, ties keep insertion order"
+      },
+      "confidence_generated_table4": "high that Table 4/15 LIBERO numbers come from this pipeline family; medium on exact builder; low on exact checkpoint identity"
+    },
+    {
+      "id": "C2",
+      "rank": 2,
+      "name": "miranda-v2 45-episode rerun (make_45ep_latex.py / submit_45ep_all.sh)",
+      "branch": "upstream/miranda-v2",
+      "commit": "ec62cad (2026-04-21)",
+      "evidence_for": [
+        "[R] 'mode: oracle' reruns of per-task selected Global/Per-Step/Pos.-Only configs at 45 episodes 'for statistical significance'; 45 = 15 + 30 under initial_states[episode] semantics would cover states 0-44"
+      ],
+      "evidence_against_or_gaps": [
+        "[P/M] Table 4 cells are k/15; P(all numerators divisible by 3 | N=45) = 3.9e-14 -> Table 4 values are not 45-episode rates",
+        "[R] The generated task_i.sh scripts and all outputs are off-repo; it is unknown whether any paper number derives from this run",
+        "[P] Paper Table 1 uses paired t-test + pooled two-proportion z-test; make_45ep_latex.py implements paired t-test + bootstrap CI (no z-test)"
+      ],
+      "confidence_generated_table4": "low"
+    },
+    {
+      "id": "C3",
+      "rank": 3,
+      "name": "miranda-v2 for_subin handoff pipeline",
+      "branch": "upstream/miranda-v2 (also miranda-groot-droid)",
+      "commit": "29059a5 (2026-04-15)",
+      "evidence_for": [
+        "[R] Same author, same NPZ schema, true time-varying per_step (set_denoise_step), mean-pooled + centered builder"
+      ],
+      "evidence_against_or_gaps": [
+        "[R] per_step condition name has no alpha (per_step_L{l}_b{b}); cannot produce the Table 4 label 'per-step alpha=10'",
+        "[R] default betas {0.1,0.3}; Table 4 has beta=0.5 cells (LR5 global and per-step)",
+        "[R] dated after the src sweep; described as a handoff bundle for another user"
+      ],
+      "confidence_generated_table4": "low"
+    },
+    {
+      "id": "C4",
+      "rank": 4,
+      "name": "released main / steering-refactor (experiments/libero/*)",
+      "branch": "upstream/main (from upstream/steering-refactor via #50)",
+      "commit": "2afa10e (main); 4df91bd/c19ac52 (2026-04-14 origin)",
+      "evidence_for": [
+        "[R] Official release; seed-offset held-out mechanism since #48"
+      ],
+      "evidence_against_or_gaps": [
+        "[R] Steering merged to main 2026-06-01, after submission",
+        "[R] per-step alpha fixed at 1.0 and per-step name carries alpha 1.0 only; cannot yield 'alpha=10'",
+        "[R] token-flattened, uncentered builder (differs from paper text)",
+        "[M] Phases 5A/5C: 19-21/30 on held-out states 15-44"
+      ],
+      "confidence_generated_table4": "low"
+    }
+  ],
+  "exact_paper_match": "none: no public code implements the paper's stated protocol (15 fit -> select -> 30 disjoint test) for pi0.5 LIBERO together with the paper's builder (pooled, centered, pseudoinverse AND, all denoising steps) and a time-varying per-step conceptor at arbitrary alpha",
+  "targeted_execution": {
+    "candidate": "C1",
+    "sha": "29059a537ce123abdab7a4e164db0c72eeff8024",
+    "worktree": "../COAST-paper-candidate",
+    "task": "KITCHEN_SCENE3_turn_on_the_stove_and_put_the_moka_pot_on_it",
+    "init_states": "0-14 (initial_states[episode])",
+    "episodes_per_condition": 15,
+    "fit_data": "brandonyang/pi05-libero-activations-v1-2000-15env@3e3a8fe2 (KS3, 8S/7F)",
+    "results": {
+      "run1": {
+        "baseline": "11/15",
+        "global_L5_a0.5_b0.1": "13/15",
+        "random_L5_b0.1": "11/15"
+      },
+      "run2a": {
+        "baseline": "10/15",
+        "global_L5_a0.5_b0.1": "12/15",
+        "random_L5_b0.1": "12/15"
+      },
+      "run2b": {
+        "baseline": "12/15",
+        "per_step_0_L5_a10.0_b0.3": "9/15",
+        "per_step_9_L5_a10.0_b0.3": "9/15",
+        "random_L5_b0.3": "8/15"
+      },
+      "run2c": {
+        "pos_only_L11_a1.0_b0.1": "7/15"
+      }
+    },
+    "paper_native_equivalent": {
+      "global": "14/15",
+      "per_step": "13/15",
+      "pos_only": "12/15",
+      "base": "8/15 (fit data)"
+    },
+    "fisher_p": {
+      "global_pooled_vs_baseline_pooled": 0.403,
+      "global_vs_random_b0.1": 0.748,
+      "global_vs_paper_14_15": 0.647,
+      "per_step_vs_13_15": 0.094,
+      "pos_only_vs_12_15": 0.128
+    },
+    "case": "A (qualified) with D elements: KS3 global value approximately reproduced under the candidate's native 15-episode fit-state semantics; not distinguishable from same-state baseline or random control"
+  }
+}

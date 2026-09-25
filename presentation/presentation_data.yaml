@@ -1,0 +1,345 @@
+# COAST reproduction deck — content source of truth.
+#
+# Layout lives in build_slides.js; this file holds the science.
+#   * Measured values are NOT typed here. Use {{d.<path>}} placeholders, which
+#     build_slides.js resolves from generated_figures/chart_data.json (written by
+#     extract_data.py from research/reproduction/experiments/). An unknown
+#     placeholder aborts the build.
+#   * Paper-reported values live under `paper:` and are referenced as {{p.<path>}}.
+#   * {{m.<key>}} reads `meta:`.
+# Inline markup: **bold**, ^{sup}, _{sub}, <o>paper-orange</o>, <c>ours-cyan</c>,
+#   <g>match-green</g>, <r>discrepancy-red</r>, <y>unresolved-yellow</y>, <m>muted</m>.
+
+meta:
+  title: "COAST Reproduction Study"
+  subtitle: "From Reproduction Gap to Mechanistic Diagnosis"
+  scope: "π0.5 · LIBERO-10 · KS3 and Cross-Task Validation"
+  author: "Stanley Chueh"
+  date: "2026-09-25"
+  latest_phase: "7A"
+  latest_phase_title: "Cross-Task Protocol Validation"
+  paper_ref: "arXiv:2605.17144 v1 — Contrastive Conceptor Activation Steering (COAST)"
+  paper_authors: "Miao, Kim, Yang, Ungar"
+  output_file: "COAST_Reproduction_Status.pptx"
+  footer: "COAST reproduction study · updated through Phase 7A"
+
+# ---------------------------------------------------------------- paper values
+# Tags: [P] stated in the paper. Decimal values are the paper's printed numbers.
+paper:
+  ks3:
+    task: "KS3 — KITCHEN_SCENE3: turn on the stove and put the moka pot on it (libero_10 task 2)"
+    base:     {value: "0.53", count15: "8/15", note: "= Table 21 fit-set rate (8 S / 7 F)"}
+    global:   {value: "0.93", config: "L5 · α 0.5 · β 0.1", count30: "28/30", count15: "14/15"}
+    per_step: {value: "0.87", config: "L5 · α 10 · β 0.3",  count30: "26/30", count15: "13/15"}
+    pos_only: {value: "0.80", config: "L11 · α 1.0 · β 0.1", count30: "24/30", count15: "12/15"}
+  libero10_mean: {base: "0.43", global: "0.76", per_step: "0.80", pos_only: "0.63"}
+  protocol_text: "15 fitting rollouts (conceptors + selection) → 30 held-out test rollouts per condition"
+  grid_table14: "layer {0,5,11,17} × α {0.1,0.5,1,2,10} × β {0.1,0.3,0.5} × 4 strategies = 240"
+  submitted: "2026-05-16"
+
+# ---------------------------------------------------------------- phases
+phase_status:
+  - {id: "0",     group: "Environment",          status: complete, outcome: "Stack runs; 3/3 smoke test (engineering check only)"}
+  - {id: "1A–1D", group: "Initial reproduction", status: complete, outcome: "Fit data 8 S / 7 F = paper; V0 ≈ V3; noise dominates"}
+  - {id: "1E–2B", group: "Mechanism",            status: complete, outcome: "Steering ≈ 0.9·h; shrinkage & random match COAST"}
+  - {id: "3A–4A", group: "Held-out validation",  status: complete, outcome: "No gain on unseen states; larger β does not help"}
+  - {id: "4B",    group: "Protocol audit",       status: complete, outcome: "Model side faithful; evaluation protocol unspecified"}
+  - {id: "5A–5C", group: "Paper protocol",       status: complete, outcome: "KS3 Global 19–21/30 vs 28/30; oracle does not close gap"}
+  - {id: "6A–6B", group: "Gap analysis",         status: complete, outcome: "Only protocol reading & unreleased code remain open"}
+  - {id: "6C",    group: "Code archaeology",     status: complete, outcome: "miranda-v2 ≈ table generator; 12–13/15 on fit states"}
+  - {id: "7A",    group: "Cross-task",           status: complete, outcome: "Held-out: paper Global = random (109/180 each)"}
+
+major_findings:
+  - "Released main does not reproduce the reported KS3 Global value under our held-out protocol."
+  - "At the paper's configurations the intervention is contraction-dominated: cos(Δh, h) ≈ −1."
+  - "miranda-v2 approximately reproduces the KS3 Global number under its native 15-episode fit-state semantics."
+  - "No public implementation matches the full paper-described protocol."
+  - "Across 4 tasks, the paper Global configuration shows no held-out advantage over a random conceptor."
+
+open_questions:
+  - "Original conceptor NPZ (HF repo returns HTTP 401)"
+  - "Exact 2026-04-13 conceptor builder"
+  - "Original per-condition summary.json files"
+  - "45-episode rerun outputs"
+  - "Checkpoint identity (training run vs released HF weights)"
+  - "Policy-noise seeding and runs per table cell"
+
+not_claimed:
+  - "that the paper is invalid"
+  - "that results were fabricated"
+  - "that COAST universally fails"
+
+author_questions:
+  status: "Reply pending (Phase 7A report); drafts in phase6b_author_questions.md and Phase 6C §10"
+  items:
+    - {q: "Table source", text: "Were Tables 4/17 generated from the 15-episode miranda-v2 sweep (best condition per strategy from `summary.json`)?"}
+    - {q: "Held-out test", text: "Was a separate 30-rollout held-out evaluation run — e.g. the `steering_results_45ep` reruns — and on which states?"}
+    - {q: "Per-step α", text: "Is the KS3 per-step “α = 10” a true α = 10 conceptor, or the loop label of `per_step_{0|9}_L5_a10.0_b0.3`?"}
+    - {q: "Builder & checkpoint", text: "Which builder / NPZ produced the reported results, and is `libero_b200_bs512/2000` = HF `openpi-libero-2000`?"}
+  framing: "We ask which protocol the tables report — not whether the results are correct."
+
+next_steps:
+  - "Phase 7B (mechanism-first): is a directional, norm-preserving component what the operator lacks?"
+  - "Same disjoint held-out protocol (states 15–44), repeats, random and shrinkage controls"
+  - "Pre-registered power target: 60 episodes/arm resolves only |Δ| ≳ 0.2–0.25"
+
+# ---------------------------------------------------------------- slides
+# Each slide: id (layout key), kicker, title, text fields for its layout,
+# source (footer provenance), notes {point, say, q, a}.
+slides:
+  - id: title
+    notes:
+      point: "Where the reproduction stands after Phase 7A, and what can and cannot be concluded."
+      say: "This summarizes every phase report from Phase 0 (environment) to Phase 7A (cross-task validation). The short version: we see a reproduction gap, we understand much of where it comes from, and we have not yet found a held-out steering effect."
+      q: "Is this a finished reproduction?"
+      a: "The measurements are finished through Phase 7A. Two things are still open: the author's clarification of which protocol the tables report, and a mechanism-first Phase 7B."
+
+  - id: objective
+    kicker: "RESEARCH OBJECTIVE"
+    title: "One question, three layers"
+    question: "Can we independently reproduce the LIBERO results reported by COAST?"
+    steps:
+      - {head: "Reproduction", body: "Do the released code and the paper protocol give the reported KS3 numbers?", status: "Gap measured · 5A–5C", color: red}
+      - {head: "Mechanism", body: "What does the intervention actually do to the hidden state?", status: "Contraction-dominated · 1E–3A", color: cyan}
+      - {head: "Generalization / Improvement", body: "Does the pattern hold on other tasks — and can the method be improved?", status: "3 more tasks · 7A · method: future", color: yellow}
+    notes:
+      point: "The project moved from 'reproduce a number' to 'explain the number' to 'does it generalize'."
+      say: "We started with the narrow goal of reproducing one Table 4 cell. When that failed, the questions became what the intervention does mechanistically, and whether our observations are specific to one task."
+      q: "Why focus on a single task (KS3) for so long?"
+      a: "KS3 is the paper's first Table 4 row, and its base rate near 0.5 gives both classes from 15 rollouts. Controlling noise and protocol on one task first was cheaper than running all ten. Phase 7A then tested three more tasks."
+
+  - id: coast
+    kicker: "BACKGROUND"
+    title: "COAST in one slide"
+    source: "Paper Sec. 3, App. A.7–A.9 [P]. Released code: src/openpi/serving/{conceptors,steering}.py"
+    notes:
+      point: "COAST builds a success-specific subspace from activations and softly projects hidden states onto it at inference time."
+      say: "We collect action-expert activations from successful and failed rollouts. For each class, a conceptor is a soft projection built from the correlation matrix, with aperture α. The contrastive conceptor keeps what success has and failure lacks. At inference, the hidden state at one layer is blended with its projection, controlled by β."
+      q: "What is the aperture α doing?"
+      a: "C = R(R + α⁻²I)⁻¹ has eigenvalues λ/(λ + α⁻²). Small α keeps only the strongest directions; large α approaches the identity on the data span. It controls how much of the activation subspace the conceptor claims."
+
+  - id: paper
+    kicker: "WHAT THE PAPER REPORTS"
+    title: "KS3, Table 4: steering lifts 0.53 → 0.93"
+    source: "Paper Tables 1, 4, 17, 21 [P]; denominators: Phase 6C §5"
+    notes:
+      point: "These are the paper's numbers: the target of the reproduction."
+      say: "For KS3 the paper reports Base 0.53, Global 0.93 with layer 5, α 0.5, β 0.1, per-step 0.87 with α 10, and positive-only 0.80. The text describes 30 held-out test rollouts, so 0.93 reads as 28 of 30. Later we found every Table 4 cell is a multiple of 1/15, so 14 of 15 fits as well."
+      q: "Why do you believe Table 4 used 15 episodes?"
+      a: "All 30 per-task Table 4 cells are compatible with k/15. The historical generator uses NUM_EPISODES=15, and the same code lineage reproduces the paper's reported grid counts. This is evidence, not proof; we have asked the author for confirmation."
+
+  - id: protocol
+    kicker: "OUR PROTOCOL"
+    title: "Reproduction protocol: fit, select, test on disjoint states"
+    flow:
+      - {head: "15 fit rollouts", body: "states 0–14 · unsteered"}
+      - {head: "Fit conceptors", body: "H⁺ / H⁻ = {{d.phase1a.fit.k}} S / 7 F"}
+      - {head: "Select config", body: "on the fit rollouts"}
+      - {head: "30 test rollouts", body: "states 15–44 · disjoint"}
+    caveat: "<y>Our interpretation.</y> The paper lists no init-state IDs or seeds for either split."
+    source: "Checkpoint openpi-libero-2000 @ aaeeabc · KS3 = libero_10 task 2 · COAST main @ 2afa10e · max 520 steps, replan 5 · LIBERO d63b117, robosuite 1.4.0, MuJoCo 3.2.3 · 2× RTX 4090"
+    notes:
+      point: "Our split follows the paper text; the paper gives no state IDs, so the exact windows are our interpretation."
+      say: "LIBERO has 50 fixed initial states per task. We fit on 0–14, which reproduces the paper's 8 successes / 7 failures, and test on the disjoint window 15–44. Earlier mechanism phases used 15–29 as development and 30–44 as held-out."
+      q: "Could the paper's test states simply be easier?"
+      a: "A window scan over our all-50-state run (Phase 6A) gives no contiguous 30-state window above 22/30 for the paper configuration. State choice alone is unlikely to reach 28/30."
+
+  - id: timeline
+    kicker: "RESEARCH PATH"
+    title: "Phase timeline: Phase 0 → 7A"
+    notes:
+      point: "Each phase answered one question before the next was chosen."
+      say: "The order matters. Mechanism work came before the full-protocol reproduction, and the archaeology came only after the protocol-faithful runs still showed a gap."
+      q: "Why was the mechanism analysis done before the full-protocol reproduction?"
+      a: "The first 15-episode pilots showed no clear effect. Before spending GPU hours on a 132-configuration sweep, we wanted to know whether the intervention could plausibly change behavior at all."
+
+  - id: gap
+    kicker: "REPRODUCTION GAP · KS3"
+    title: "Held-out KS3: 19–21/30 vs the reported 28/30"
+    message: "Oracle selection did not close the gap."
+    stats:
+      - "Global runs {{d.phase5a.global.k}}, {{d.phase4a.S_coast_b01.k}}, {{d.phase5c.test.global.k}} of 30 → pooled **{{d.ks3_pooled_15_44.global.label}}**"
+      - "Unsteered runs {{d.phase5a.baseline.k}}, {{d.phase4a.S_baseline.k}}, {{d.phase5c.test.baseline.k}} of 30 → pooled **{{d.ks3_pooled_15_44.baseline.label}}**"
+      - "vs 28/30: Fisher p = {{d.phase5a.p_vs_paper|3}} (5A), {{d.phase5c.test.global.p_vs_paper|3}} (5C) <m>— reference only, paper states unknown</m>"
+      - "Other 5C oracles: positive-only {{d.phase5c.test.positive_only.label}} (paper 24/30) · per-step {{d.phase5c.test.per_step.label}} at α = 1 (paper 26/30 at α = 10, not like-for-like)"
+    source: "phase5a_ks3_episode_results.csv · phase4a_episode_results.csv (set S) · phase5c_test_episode_results.csv · released main, V0 builder"
+    notes:
+      point: "Three independent sessions of global COAST on the same held-out states all land at 19–21/30; unsteered runs land at 17–21/30."
+      say: "The fixed paper configuration gave 19 and 20 of 30. Running the paper's oracle procedure over 132 configurations picked L11, α 0.5, β 0.3, which gave 21 of 30. All three are inside the range of our unsteered runs, and far from 28."
+      q: "Maybe you just got unlucky in a single run?"
+      a: "At a true rate of about 0.67, P(≥ 28/30) in one run is 0.0007 (Phase 6A). Pooled over three sessions, 60/90 differs from 28/30 at Fisher p = 0.004. Single-run noise does not explain the gap."
+
+  - id: noise
+    kicker: "STOCHASTICITY"
+    title: "The unsteered policy alone moves by ±3 of 15"
+    message: "A single stochastic run cannot resolve a 2–4 episode difference."
+    stats:
+      - "**{{d.phase1d.states_mixed_across_seeds}} / 15** states flip outcome with the noise seed alone (1D)"
+      - "Binomial SD at N = 30, p ≈ 0.6: **≈ 0.09** (≈ 2.7 episodes)"
+      - "Paired noise: V0 ↔ V3 agreement **{{d.phase1c.agree_v0_v3}}/15 → {{d.phase1d.agree_v0_v3}}/15**"
+    source: "phase1c/1d_episode_results.csv · phase1a_activation_collection.yaml · phase5c_ks3_oracle_sweep.yaml (fit baselines) · phase4a/5a/5c episode CSVs"
+    notes:
+      point: "Policy sampling noise, not steering, is the dominant source of run-to-run variation at N = 15–30."
+      say: "π0.5 samples flow-matching noise from an unseeded CUDA generator. With our seeded paired-noise instrumentation, the same 15 states gave 13, 7 and 10 successes depending only on the master seed. On the fit states, five unsteered sweep baselines ranged from 4 to 11 of 15."
+      q: "Then why not always use paired noise?"
+      a: "We did for the mechanism phases (1D–4A). It makes conditions comparable, but one paired seed is still a sample of size one over noise draws. The protocol-reproduction phases used the released unseeded path, to match the paper's code."
+
+  - id: mechanism
+    kicker: "MECHANISM · PHASE 1E"
+    title: "What does COAST actually do to h?"
+    interpretation: "The tested intervention is nearly antiparallel to h — consistent with dominant contraction, h′ ≈ {{d.phase1e.effective_scale}}·h."
+    source: "phase1e_intervention_diagnostics.yaml (V0, L5 α 0.5 β 0.1, states 15–29, seed 100) · phase7a_operator_diagnostics.csv · steering.py:447, 461"
+    notes:
+      point: "Because the conceptor term is tiny on visited states, the gate reduces to multiplying h by about 1 − β."
+      say: "Expand the gate: h′ = (1−β)h + βCh, so Δh = β(Ch − h). If h has little energy inside C, Ch is small and Δh ≈ −βh. We instrumented the hook: over 9,220 applications the relative change is 0.0994 and the cosine with h is −0.9996. Phase 7A found the same on three other tasks."
+      q: "Isn't shrinking the residual stream by 10% a real intervention?"
+      a: "Yes. It changes actions by about 1.0 on a fixed input. The claim is not 'no effect'; it is that the effect's direction comes from h itself, not from the success-specific subspace. That is what Phase 2 tests."
+
+  - id: ablation
+    kicker: "MECHANISM ABLATIONS · 2A / 2B / 3A"
+    title: "COAST vs shrinkage vs a spectrum-matched random C"
+    conclusion: "In the tested KS3 setting, the behavioral effect was not clearly distinguishable from shrinkage or a matched random control."
+    caveat: "Paired noise (seed 100) · one run per condition · 15 states per split · all exact McNemar p ≥ 0.25 · Shrink: M = 0.9·I · Random: C_real eigenvalues, random eigenvectors"
+    source: "phase2a/2b_episode_results.csv (states 15–29) · phase3a_episode_results.csv (states 30–44) · V0, L5 α 0.5 β 0.1"
+    notes:
+      point: "Removing the conceptor, or randomizing its eigenvectors, left episode outcomes essentially unchanged."
+      say: "Shrinkage replaces C with zero; random-matched keeps C's eigenvalues and randomizes its eigenvectors. With paired noise, shrinkage matched COAST on 14 of 15 states in both splits, and random matched COAST on 15 of 15 in development and 13 of 15 held-out. Across 30 states, real COAST was never the only condition that differed."
+      q: "Does this prove COAST is just shrinkage?"
+      a: "No. It holds for one task, layer 5, β 0.1 and this conceptor, whose spectrum is weak (λ_max 0.35, median 0.001). Larger β, other layers or other tasks could differ. Phase 7A extends the random-control result to three tasks, with a different builder."
+
+  - id: why_history
+    kicker: "WHY LOOK AT THE HISTORY?"
+    title: "Paper description ≠ released main ≠ historical pipeline"
+    triggers:
+      - "Per-step α = 10 cannot be expressed in main"
+      - "Steering merged to main on Jun 1 — after submission"
+      - "`best_configs.json` is an empty placeholder"
+      - "Paper Base = fit-set rate in 10/10 tasks"
+    legend: "<g>✓</g> as described in the paper · <r>✗</r> differs · <y>!</y> partial / label only"
+    source: "Phase 1A/1B (builder D1–D3), 4B §3, 5B, 6C §4 · miranda-v2 builder = public `for_subin/build_conceptors.py` @ 29059a5"
+    notes:
+      point: "The released code could not have produced some of the paper's numbers, so we searched the public history for the code that did."
+      say: "Four observations pushed us there. The per-step α of 10 cannot be expressed in main. The steering code reached main only after submission. The tuned-config file is empty. The Base column equals the fit-set rate for every task."
+      q: "Couldn't the authors simply have used unreleased code?"
+      a: "Yes, that is the most plausible reading, and it is why we looked. The public branches turned out to contain a pipeline whose labels and counts match the tables."
+
+  - id: archaeology
+    kicker: "HISTORICAL-CODE ARCHAEOLOGY · PHASE 6C"
+    title: "Searching every public ref for the table generator"
+    message: "The pipeline that plausibly generated Table 4 predates both the held-out seeding change (#48) and the released code."
+    source: "phase6c_branch_matrix.csv · phase6c_author_branch_archaeology.md §2–3 · public git history of COAST-VLA/COAST"
+    notes:
+      point: "The chronology matters: the likely table generator ran before the code could select held-out init states."
+      say: "We inventoried 22 branches and 50 PR heads, inspected 10 branches commit by commit, and searched every ref. The miranda-v2 LIBERO sweep appeared on April 13. Before PR #48 on April 23, the LIBERO client always started from init state 0, so a 15-episode run used states 0–14 — the fit states."
+      q: "Did you modify any upstream refs?"
+      a: "No. PR heads were fetched read-only into a local namespace, and the candidate ran in an isolated, detached worktree with no commits."
+
+  - id: evidence
+    kicker: "PROVENANCE EVIDENCE"
+    title: "Why miranda-v2 looks like the table generator"
+    badge: "Strong provenance evidence — not definitive proof"
+    source: "Paper Tables 4, 8, 14, 15 [P] · miranda-v2 2fdc5ad / ec62cad [R] · phase6c_author_branch_archaeology.md §1, §5"
+    notes:
+      point: "Several independent textual and arithmetic matches point to the same pipeline."
+      say: "The grid count 152 and the 'Selected Grid 18' match the sweep code exactly. The per-step α = 10 is a loop label. All positive-only cells sit in that code's small grid. Every Table 4 cell is a multiple of 1/15; if the denominator were 30, the chance of that is 4 × 10⁻⁹. The Table 15 caption matches the reporting script."
+      q: "Couldn't k/15 happen by chance?"
+      a: "If each cell were k/30, all 30 numerators would need to be even: P = 4.0 × 10⁻⁹. The test also discriminates: Table 8 (π0-FAST MetaWorld, a 16-environment pipeline) shows k/16."
+
+  - id: historical
+    kicker: "HISTORICAL PIPELINE · PHASE 6C"
+    title: "miranda-v2, run as written: 12–13/15 on the fit states"
+    message: "The historical pipeline approximately reproduces the numerical Global score, but baseline and random controls reach the same range."
+    source: "phase6c_candidate_test_results.csv · miranda-v2 @ 29059a5 (unmodified) · authors' fit activations · states 0–14, unseeded"
+    notes:
+      point: "The paper's KS3 Global number is reachable — but only under fit-state semantics, where controls score just as high."
+      say: "We ran the candidate code unmodified on the authors' own fit activations. Global L5 scored 13 and 12 of 15, close to the paper's 14. In the same sessions, unsteered runs scored 11, 10 and 12, and the random control 11 and 12. These are the fit states, so this is not a held-out result."
+      q: "So is the paper's number 'reproduced'?"
+      a: "The number is approximately reproduced under the historical pipeline's own semantics — 15 rollouts on the fitting states. That measures something different from the paper's stated 30-rollout held-out test, and it does not separate steering from no steering."
+
+  - id: discrepancies
+    kicker: "EXACT DISCREPANCIES"
+    title: "Paper vs public code, component by component"
+    footnote: "<y>!</y> miranda-v2 builder column = public `for_subin` builder (29059a5); the 2026-04-13 builder that wrote the NPZ actually used is not public."
+    source: "Phase 1A/1B (D1–D3), 4B §3, 5B §2, 6C §4 · paper Sec. 3.2, App. A.8–A.9, Table 14"
+    notes:
+      point: "No public implementation matches the paper text on every component; each differs on different rows."
+      say: "Main has the right evaluation mechanism but a different builder. miranda-v2 has a closer builder on pooling and centering, but no held-out split, 15 episodes, a different contrastive product, denoising step 0 only, and a per-step strategy where α is only a label."
+      q: "Do the builder differences matter behaviorally?"
+      a: "At the tested configuration, apparently not much. V0 and the paper-text V3 gave identical outcomes on 15/15 paired states (1D), and every builder we measured acts as ≈ (1−β)h. The evaluation-side differences matter more for the headline number."
+
+  - id: phase7a_design
+    kicker: "CROSS-TASK VALIDATION · PHASE 7A"
+    title: "Does the KS3 pattern generalize?"
+    status: "COMPLETE · {{d.phase7a.n_episodes}} episodes"
+    pgg_note: "PGG > 0: the apparent gain is larger under historical fit-state evaluation than under held-out evaluation."
+    source: "phase7a_preregistration.md (sha256 08293552…, frozen before any rollout) · miranda-v2 @ 29059a5 unmodified · authors' fit activations"
+    notes:
+      point: "Three more tasks, both evaluation semantics, the same conceptor in both arms."
+      say: "We chose tasks only from paper values: the largest, median and smallest paper gain among eligible tasks. Each ran baseline, the paper's exact Global configuration, and the candidate's random control, on the historical fit states and on disjoint held-out states, twice. Only the state window differs between arms."
+      q: "Why use the historical pipeline instead of main here?"
+      a: "To test the protocol question cleanly: the same code and conceptor that plausibly generated the tables, evaluated on two state windows. Differences between arms can then only come from the evaluation window."
+
+  - id: phase7a_results
+    kicker: "CROSS-TASK VALIDATION · PHASE 7A"
+    title: "Held-out: paper Global ≈ random control in every task"
+    stats:
+      - "Pooled held-out: Global **{{d.phase7a.pooled.T.PAPER_GLOBAL}}** = Random **{{d.phase7a.pooled.T.RANDOM_CONTROL}}**; baseline {{d.phase7a.pooled.T.BASELINE}} (CMH p = {{d.phase7a.pooled.T.global_vs_base_CMH_p}})"
+      - "No task met “clearly better” (pooled p < 0.05 and same sign in both repeats)"
+      - "PGG not consistent: mean {{d.phase7a.mean_PGG|3}} → no systematic fit-to-held-out drop"
+      - "Pre-registered classification: **Case A**"
+    caveat: "Repeats share init states → pooled counts are not independent · candidate random conceptor is not spectrum-matched (quota ≈ 0.18)"
+    source: "phase7a_summary.csv · phase7a_analysis.json · phase7a_cross_task_validation.yaml"
+    notes:
+      point: "The robust, general finding is not a protocol gap; it is that the paper-selected conceptor does no better than a random one on held-out states."
+      say: "On held-out states, Global and Random are identical when pooled: 109 of 180 each, both somewhat above baseline at 92. No task met the pre-registered rule for a clear advantage. The fit-to-held-out gap was +0.03, −0.15 and +0.13: not systematic. On the fit states, the paper's Global values were not reached in the pooled runs."
+      q: "Global beats baseline by +0.09 pooled; isn't that a steering effect?"
+      a: "It is a nonspecific one: the random conceptor gives exactly the same pooled count, and CMH p = 0.086. Whatever helps is shared with a random subspace at the same layer and β — consistent with contraction, not with success-specific directions."
+
+  - id: conclusion
+    kicker: "CURRENT SCIENTIFIC POSITION"
+    title: "What we can and cannot conclude"
+    supported:
+      - "Released main does not reproduce the reported KS3 Global value under our held-out protocol (19–21/30 vs 28/30)."
+      - "miranda-v2 approximately reproduces the KS3 Global number under its native 15-fit-state semantics (12–13 vs 14/15) — with controls in the same range; not reached for LR2a / KS4 (7A)."
+      - "No public implementation matches the full paper-described protocol."
+      - "In 4/4 tasks the paper Global configuration shows no held-out advantage over a random conceptor."
+    source: "Phases 5A–5C, 6C, 7A"
+    notes:
+      point: "Separate what is measured from what is open, and state explicitly what we do not claim."
+      say: "Four statements are supported by our records. Six artifacts would settle the rest, and all of them are with the authors. We make no claim that the paper is invalid, that anything was fabricated, or that COAST fails in general."
+      q: "Is this a negative result about COAST?"
+      a: "It is a negative result about one component under our protocol: on held-out states the conceptor-specific part adds nothing detectable over a random control, in four tasks, with one checkpoint. It is not a verdict on the method or the paper."
+
+  - id: authors
+    kicker: "AUTHOR CLARIFICATION"
+    title: "What we asked the author"
+    source: "phase6b_author_questions.md · phase6c_author_branch_archaeology.md §10"
+    notes:
+      point: "The remaining unknowns can only be answered by the authors, and the questions are now specific."
+      say: "We ask four things: whether Tables 4/17 came from the 15-episode sweep, whether a separate 30-rollout held-out run exists, what per-step α = 10 means, and which builder and checkpoint were used. The framing is about protocol, not correctness."
+      q: "What happens if the author confirms fit-state best-of-sweep reporting?"
+      a: "Then Table 4 would measure selection on the fitting rollouts, and our held-out results (5A–5C, 7A) would be the first held-out estimates. The research question becomes whether any COAST variant helps on held-out states."
+
+  - id: next
+    kicker: "NEXT STEP & POSSIBLE CONTRIBUTION"
+    title: "Next: Phase 7B, mechanism first"
+    future_title: "If the mechanism holds…"
+    future_badge: "FUTURE WORK · NOT YET TESTED"
+    source: "phase7a_cross_task_validation.md §12, §14"
+    notes:
+      point: "The next step is diagnostic, not a new method; a method idea is kept separate and labelled untested."
+      say: "Phase 7B asks whether a directional, norm-preserving component is what the operator lacks, under the same held-out protocol with controls and a power target. Only if that holds does a new intervention make sense, for example h′ = h + γD(h) with D preserving the norm and isolating a success-specific direction."
+      q: "Why not start the new method now?"
+      a: "Any new method must beat baseline and a matched random or shrinkage control on disjoint held-out states, with repeats. With 60 episodes per arm, only differences of about 0.2–0.25 are detectable, so the evaluation design has to come first."
+
+  - id: takeaway
+    kicker: "TAKEAWAY"
+    lines:
+      - "Under a documented held-out protocol, the released implementation shows a reproducible gap to the reported KS3 result: <c>19–21/30</c> vs <o>28/30</o>."
+      - "Historical-code archaeology explains much of the numerical discrepancy — the closest author pipeline scores 15 fit-state rollouts — and exposes protocol and implementation differences from the paper text."
+      - "Cross-task validation found no held-out advantage over a random conceptor in 4/4 tasks; next is a mechanism-first Phase 7B before proposing any new steering method."
+    notes:
+      point: "Gap measured, source largely explained, generalization checked; method work comes after diagnosis."
+      say: "If one thing should stay: the reported number is reachable only under fit-state semantics, where no-steering controls score just as well; on held-out states we find no conceptor-specific effect in four tasks."
+      q: "What would change your conclusion?"
+      a: "The authors' summary.json, NPZ and a held-out evaluation showing a conceptor-specific gain; or a Phase 7B result where a directional component beats matched controls on held-out states."

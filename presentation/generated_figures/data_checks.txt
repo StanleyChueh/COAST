@@ -1,0 +1,63 @@
+OK   1A fit successes: computed=8 reported=8
+OK   1D noise floor: computed=[13, 7, 10] reported=[13, 7, 10]
+OK   1D states mixed: computed=11 reported=11
+OK   1C baseline: computed=8 reported=8
+OK   1C V0/V3 agreement: computed=9 reported=9
+OK   1D V0/V3 agreement: computed=15 reported=15
+OK   1E rel delta: computed=0.09942 reported=0.09942
+OK   1E cosine: computed=-0.99962 reported=-0.99962
+OK   2B counts: computed=[13, 10, 11, 11] reported=[13, 10, 11, 11]
+OK   2B agree coast/random: computed=15 reported=15
+OK   2B agree coast/shrink: computed=14 reported=14
+OK   2A agree coast/shrink: computed=14 reported=14
+OK   3A counts: computed=[9, 10, 11, 11] reported=[9, 10, 11, 11]
+OK   3A agree coast/random: computed=13 reported=13
+OK   3A agree coast/shrink: computed=14 reported=14
+OK   4A S baseline: computed=21 reported=21
+OK   4A S coast b0.1: computed=20 reported=20
+OK   4A all-50 COAST b0.1/0.2/0.3: computed=[32, 33, 27] reported=[32, 33, 27]
+OK   5C global test k: computed=21 reported=21
+OK   5C positive_only test k: computed=17 reported=17
+OK   5C per_step test k: computed=15 reported=15
+OK   5A global/baseline: computed=[19, 19] reported=[19, 19]
+OK   5A Fisher vs 28/30: computed=0.01 reported=0.01
+OK   5C Fisher global vs 28/30: computed=0.042 reported=0.042
+OK   5C fit baselines: computed=[10, 5, 4, 11, 6] reported=[10, 5, 4, 11, 6]
+OK   pooled global 60/90: computed=60 reported=60
+OK   pooled baseline 57/90: computed=57 reported=57
+OK   pooled vs paper p: computed=0.004 reported=0.004
+OK   6C global runs: computed=[13, 12] reported=[13, 12]
+OK   6C baseline runs: computed=[11, 10, 12] reported=[11, 10, 12]
+OK   6C random b0.1 runs: computed=[11, 12] reported=[11, 12]
+OK   6C p global vs baseline: computed=0.4 reported=0.4
+OK   6C p global vs random: computed=0.75 reported=0.75
+OK   6C p global vs paper: computed=0.65 reported=0.65
+OK   6C public branches: computed=22 reported=22
+OK   6C PR heads: computed=50 reported=50
+OK   7A LR2a H BASELINE reps sum: computed=14 reported=14
+OK   7A LR2a H PAPER_GLOBAL reps sum: computed=17 reported=17
+OK   7A LR2a H RANDOM_CONTROL reps sum: computed=16 reported=16
+OK   7A LR2a T BASELINE reps sum: computed=31 reported=31
+OK   7A LR2a T PAPER_GLOBAL reps sum: computed=35 reported=35
+OK   7A LR2a T RANDOM_CONTROL reps sum: computed=38 reported=38
+OK   7A LR2a PGG recomputed: computed=0.03 reported=0.03
+OK   7A KS4 H BASELINE reps sum: computed=16 reported=16
+OK   7A KS4 H PAPER_GLOBAL reps sum: computed=14 reported=14
+OK   7A KS4 H RANDOM_CONTROL reps sum: computed=17 reported=17
+OK   7A KS4 T BASELINE reps sum: computed=25 reported=25
+OK   7A KS4 T PAPER_GLOBAL reps sum: computed=30 reported=30
+OK   7A KS4 T RANDOM_CONTROL reps sum: computed=24 reported=24
+OK   7A KS4 PGG recomputed: computed=-0.15 reported=-0.15
+OK   7A LR1 H BASELINE reps sum: computed=15 reported=15
+OK   7A LR1 H PAPER_GLOBAL reps sum: computed=23 reported=23
+OK   7A LR1 H RANDOM_CONTROL reps sum: computed=19 reported=19
+OK   7A LR1 T BASELINE reps sum: computed=36 reported=36
+OK   7A LR1 T PAPER_GLOBAL reps sum: computed=44 reported=44
+OK   7A LR1 T RANDOM_CONTROL reps sum: computed=47 reported=47
+OK   7A LR1 PGG recomputed: computed=0.13 reported=0.13
+OK   7A pooled T global: computed='109/180' reported='109/180'
+OK   7A pooled T random: computed='109/180' reported='109/180'
+OK   7A pooled T baseline: computed='92/180' reported='92/180'
+OK   7A episodes: computed=810 reported=810
+
+61 checks passed.

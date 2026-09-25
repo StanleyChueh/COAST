@@ -1,0 +1,1181 @@
+{
+  "_generated_by": "presentation/extract_data.py",
+  "_source_root": "research/reproduction/experiments",
+  "phase0": {
+    "smoke": {
+      "k": 3,
+      "n": 3,
+      "rate": 1.0,
+      "wilson95": [
+        0.439,
+        1.0
+      ],
+      "label": "3/3",
+      "source": "phase0_smoke_test.yaml"
+    }
+  },
+  "phase1a": {
+    "fit": {
+      "k": 8,
+      "n": 15,
+      "rate": 0.533,
+      "wilson95": [
+        0.301,
+        0.752
+      ],
+      "label": "8/15",
+      "source": "phase1a_activation_collection.yaml (states 0-14, unseeded)"
+    }
+  },
+  "phase1c": {
+    "baseline": {
+      "k": 8,
+      "n": 15,
+      "rate": 0.533,
+      "wilson95": [
+        0.301,
+        0.752
+      ],
+      "label": "8/15",
+      "source": "phase1c_episode_results.csv (states 15-29, unseeded)"
+    },
+    "v0": {
+      "k": 10,
+      "n": 15,
+      "rate": 0.667,
+      "wilson95": [
+        0.417,
+        0.848
+      ],
+      "label": "10/15",
+      "source": "phase1c_episode_results.csv"
+    },
+    "v3": {
+      "k": 10,
+      "n": 15,
+      "rate": 0.667,
+      "wilson95": [
+        0.417,
+        0.848
+      ],
+      "label": "10/15",
+      "source": "phase1c_episode_results.csv"
+    },
+    "agree_v0_v3": 9
+  },
+  "phase1d": {
+    "noise_floor": {
+      "100": {
+        "k": 13,
+        "n": 15,
+        "rate": 0.867,
+        "wilson95": [
+          0.621,
+          0.963
+        ],
+        "label": "13/15",
+        "source": "phase1d_episode_results.csv nf100_success (states 15-29, master seed 100)"
+      },
+      "200": {
+        "k": 7,
+        "n": 15,
+        "rate": 0.467,
+        "wilson95": [
+          0.248,
+          0.699
+        ],
+        "label": "7/15",
+        "source": "phase1d_episode_results.csv nf200_success (states 15-29, master seed 200)"
+      },
+      "300": {
+        "k": 10,
+        "n": 15,
+        "rate": 0.667,
+        "wilson95": [
+          0.417,
+          0.848
+        ],
+        "label": "10/15",
+        "source": "phase1d_episode_results.csv nf300_success (states 15-29, master seed 300)"
+      }
+    },
+    "states_mixed_across_seeds": 11,
+    "baseline": {
+      "k": 13,
+      "n": 15,
+      "rate": 0.867,
+      "wilson95": [
+        0.621,
+        0.963
+      ],
+      "label": "13/15",
+      "source": "phase1d_episode_results.csv"
+    },
+    "v0": {
+      "k": 11,
+      "n": 15,
+      "rate": 0.733,
+      "wilson95": [
+        0.48,
+        0.891
+      ],
+      "label": "11/15",
+      "source": "phase1d_episode_results.csv"
+    },
+    "v3": {
+      "k": 11,
+      "n": 15,
+      "rate": 0.733,
+      "wilson95": [
+        0.48,
+        0.891
+      ],
+      "label": "11/15",
+      "source": "phase1d_episode_results.csv"
+    },
+    "agree_v0_v3": 15
+  },
+  "phase1e": {
+    "source": "phase1e_intervention_diagnostics.yaml (V0, L5 a0.5 b0.1 global, states 15-29, seed 100)",
+    "hook_applications": 9220,
+    "rel_delta_mean": 0.09942,
+    "rel_delta_std": 0.00027,
+    "cos_mean": -0.99962,
+    "cos_min": -0.9998,
+    "cos_max": -0.9985,
+    "hidden_norm_mean": 170.56,
+    "effective_scale": 0.9006,
+    "rayleigh_text": "≈ 0.006",
+    "lambda_max": 0.35215,
+    "lambda_median": 0.00132,
+    "trace_over_d": 0.0185,
+    "by_step_delta": [
+      22.298,
+      19.93,
+      18.672,
+      17.796,
+      17.168,
+      16.121,
+      15.486,
+      14.769,
+      13.99,
+      13.394
+    ],
+    "by_step_hidden": [
+      223.8,
+      200.02,
+      187.45,
+      178.72,
+      172.49,
+      162.08,
+      155.81,
+      148.74,
+      141.13,
+      135.39
+    ]
+  },
+  "phase2a": {
+    "baseline": {
+      "k": 13,
+      "n": 15,
+      "rate": 0.867,
+      "wilson95": [
+        0.621,
+        0.963
+      ],
+      "label": "13/15",
+      "source": "phase2a_episode_results.csv"
+    },
+    "coast": {
+      "k": 11,
+      "n": 15,
+      "rate": 0.733,
+      "wilson95": [
+        0.48,
+        0.891
+      ],
+      "label": "11/15",
+      "source": "phase2a_episode_results.csv"
+    },
+    "shrinkage": {
+      "k": 10,
+      "n": 15,
+      "rate": 0.667,
+      "wilson95": [
+        0.417,
+        0.848
+      ],
+      "label": "10/15",
+      "source": "phase2a_episode_results.csv"
+    },
+    "agree_coast_shrink": 14
+  },
+  "phase2b": {
+    "baseline": {
+      "k": 13,
+      "n": 15,
+      "rate": 0.867,
+      "wilson95": [
+        0.621,
+        0.963
+      ],
+      "label": "13/15",
+      "source": "phase2b_episode_results.csv (states 15-29, paired noise seed 100)"
+    },
+    "shrinkage": {
+      "k": 10,
+      "n": 15,
+      "rate": 0.667,
+      "wilson95": [
+        0.417,
+        0.848
+      ],
+      "label": "10/15",
+      "source": "phase2b_episode_results.csv (states 15-29, paired noise seed 100)"
+    },
+    "coast": {
+      "k": 11,
+      "n": 15,
+      "rate": 0.733,
+      "wilson95": [
+        0.48,
+        0.891
+      ],
+      "label": "11/15",
+      "source": "phase2b_episode_results.csv (states 15-29, paired noise seed 100)"
+    },
+    "random_matched": {
+      "k": 11,
+      "n": 15,
+      "rate": 0.733,
+      "wilson95": [
+        0.48,
+        0.891
+      ],
+      "label": "11/15",
+      "source": "phase2b_episode_results.csv (states 15-29, paired noise seed 100)"
+    },
+    "agree_coast_random": 15,
+    "agree_coast_shrink": 14,
+    "norm_ratio": {
+      "shrinkage": 0.8984,
+      "coast": 0.9006,
+      "random_matched": 0.9023
+    }
+  },
+  "phase3a": {
+    "baseline": {
+      "k": 9,
+      "n": 15,
+      "rate": 0.6,
+      "wilson95": [
+        0.357,
+        0.802
+      ],
+      "label": "9/15",
+      "source": "phase3a_episode_results.csv (held-out states 30-44, paired noise seed 100)"
+    },
+    "shrinkage": {
+      "k": 10,
+      "n": 15,
+      "rate": 0.667,
+      "wilson95": [
+        0.417,
+        0.848
+      ],
+      "label": "10/15",
+      "source": "phase3a_episode_results.csv (held-out states 30-44, paired noise seed 100)"
+    },
+    "coast": {
+      "k": 11,
+      "n": 15,
+      "rate": 0.733,
+      "wilson95": [
+        0.48,
+        0.891
+      ],
+      "label": "11/15",
+      "source": "phase3a_episode_results.csv (held-out states 30-44, paired noise seed 100)"
+    },
+    "random_matched": {
+      "k": 11,
+      "n": 15,
+      "rate": 0.733,
+      "wilson95": [
+        0.48,
+        0.891
+      ],
+      "label": "11/15",
+      "source": "phase3a_episode_results.csv (held-out states 30-44, paired noise seed 100)"
+    },
+    "agree_coast_random": 13,
+    "agree_coast_shrink": 14,
+    "mcnemar_base_coast_p": 0.5
+  },
+  "phase4a": {
+    "S_baseline": {
+      "k": 21,
+      "n": 30,
+      "rate": 0.7,
+      "wilson95": [
+        0.521,
+        0.833
+      ],
+      "label": "21/30",
+      "source": "phase4a_episode_results.csv (states 15-44, paired noise seed 100)"
+    },
+    "S_coast_b01": {
+      "k": 20,
+      "n": 30,
+      "rate": 0.667,
+      "wilson95": [
+        0.488,
+        0.808
+      ],
+      "label": "20/30",
+      "source": "phase4a_episode_results.csv (states 15-44, paired noise seed 100)"
+    },
+    "S_shrink_b01": {
+      "k": 21,
+      "n": 30,
+      "rate": 0.7,
+      "wilson95": [
+        0.521,
+        0.833
+      ],
+      "label": "21/30",
+      "source": "phase4a_episode_results.csv (states 15-44, paired noise seed 100)"
+    },
+    "all50": {
+      "baseline": {
+        "k": 30,
+        "n": 50,
+        "rate": 0.6,
+        "wilson95": [
+          0.462,
+          0.724
+        ],
+        "label": "30/50",
+        "source": "phase4a_episode_results.csv (P + S, all 50 states)"
+      },
+      "coast_b01": {
+        "k": 32,
+        "n": 50,
+        "rate": 0.64,
+        "wilson95": [
+          0.501,
+          0.759
+        ],
+        "label": "32/50",
+        "source": "phase4a_episode_results.csv (P + S, all 50 states)"
+      },
+      "coast_b02": {
+        "k": 33,
+        "n": 50,
+        "rate": 0.66,
+        "wilson95": [
+          0.522,
+          0.776
+        ],
+        "label": "33/50",
+        "source": "phase4a_episode_results.csv (P + S, all 50 states)"
+      },
+      "coast_b03": {
+        "k": 27,
+        "n": 50,
+        "rate": 0.54,
+        "wilson95": [
+          0.404,
+          0.67
+        ],
+        "label": "27/50",
+        "source": "phase4a_episode_results.csv (P + S, all 50 states)"
+      },
+      "shrink_b01": {
+        "k": 31,
+        "n": 50,
+        "rate": 0.62,
+        "wilson95": [
+          0.482,
+          0.741
+        ],
+        "label": "31/50",
+        "source": "phase4a_episode_results.csv (P + S, all 50 states)"
+      },
+      "shrink_b02": {
+        "k": 34,
+        "n": 50,
+        "rate": 0.68,
+        "wilson95": [
+          0.542,
+          0.792
+        ],
+        "label": "34/50",
+        "source": "phase4a_episode_results.csv (P + S, all 50 states)"
+      },
+      "shrink_b03": {
+        "k": 33,
+        "n": 50,
+        "rate": 0.66,
+        "wilson95": [
+          0.522,
+          0.776
+        ],
+        "label": "33/50",
+        "source": "phase4a_episode_results.csv (P + S, all 50 states)"
+      }
+    }
+  },
+  "phase5a": {
+    "global": {
+      "k": 19,
+      "n": 30,
+      "rate": 0.633,
+      "wilson95": [
+        0.455,
+        0.781
+      ],
+      "label": "19/30",
+      "source": "phase5a_ks3_episode_results.csv (states 15-44, unseeded)"
+    },
+    "baseline": {
+      "k": 19,
+      "n": 30,
+      "rate": 0.633,
+      "wilson95": [
+        0.455,
+        0.781
+      ],
+      "label": "19/30",
+      "source": "phase5a_ks3_episode_results.csv (states 15-44, unseeded)"
+    },
+    "p_vs_paper": 0.010248938246969971
+  },
+  "phase5c": {
+    "test": {
+      "baseline": {
+        "k": 17,
+        "n": 30,
+        "rate": 0.567,
+        "wilson95": [
+          0.392,
+          0.726
+        ],
+        "label": "17/30",
+        "source": "phase5c_test_episode_results.csv (states 15-44, unseeded)"
+      },
+      "global": {
+        "k": 21,
+        "n": 30,
+        "rate": 0.7,
+        "wilson95": [
+          0.521,
+          0.833
+        ],
+        "label": "21/30",
+        "source": "phase5c_test_episode_results.csv (states 15-44, unseeded)",
+        "fit": "13/15",
+        "config": "L11 α0.5 β0.3",
+        "p_vs_paper": 0.0419
+      },
+      "positive_only": {
+        "k": 17,
+        "n": 30,
+        "rate": 0.567,
+        "wilson95": [
+          0.392,
+          0.726
+        ],
+        "label": "17/30",
+        "source": "phase5c_test_episode_results.csv (states 15-44, unseeded)",
+        "fit": "12/15",
+        "config": "L0 α2.0 β0.3",
+        "p_vs_paper": 0.0946
+      },
+      "per_step": {
+        "k": 15,
+        "n": 30,
+        "rate": 0.5,
+        "wilson95": [
+          0.332,
+          0.668
+        ],
+        "label": "15/30",
+        "source": "phase5c_test_episode_results.csv (states 15-44, unseeded)",
+        "fit": "11/15",
+        "config": "L5 α1.0 β0.3",
+        "p_vs_paper": 0.0048
+      }
+    },
+    "fit_baselines": [
+      10,
+      5,
+      4,
+      11,
+      6
+    ],
+    "fit_baselines_source": "phase5c_ks3_oracle_sweep.yaml fit_state_baselines"
+  },
+  "ks3_pooled_15_44": {
+    "global": {
+      "k": 60,
+      "n": 90,
+      "rate": 0.667,
+      "wilson95": [
+        0.564,
+        0.755
+      ],
+      "label": "60/90",
+      "source": "5A + 4A(S, b0.1) + 5C global runs"
+    },
+    "baseline": {
+      "k": 57,
+      "n": 90,
+      "rate": 0.633,
+      "wilson95": [
+        0.53,
+        0.726
+      ],
+      "label": "57/90",
+      "source": "5A + 4A(S) + 5C baseline runs"
+    },
+    "p_global_vs_baseline": 0.7547765464053329,
+    "p_global_vs_paper": 0.0037707564811912263
+  },
+  "phase6c": {
+    "baseline": [
+      {
+        "k": 11,
+        "n": 15,
+        "rate": 0.733,
+        "wilson95": [
+          0.48,
+          0.891
+        ],
+        "label": "11/15",
+        "source": "phase6c_candidate_test_results.csv (miranda-v2 @ 29059a5, states 0-14, unseeded)",
+        "run": "run1"
+      },
+      {
+        "k": 10,
+        "n": 15,
+        "rate": 0.667,
+        "wilson95": [
+          0.417,
+          0.848
+        ],
+        "label": "10/15",
+        "source": "phase6c_candidate_test_results.csv (miranda-v2 @ 29059a5, states 0-14, unseeded)",
+        "run": "run2a"
+      },
+      {
+        "k": 12,
+        "n": 15,
+        "rate": 0.8,
+        "wilson95": [
+          0.548,
+          0.93
+        ],
+        "label": "12/15",
+        "source": "phase6c_candidate_test_results.csv (miranda-v2 @ 29059a5, states 0-14, unseeded)",
+        "run": "run2b"
+      }
+    ],
+    "global": [
+      {
+        "k": 13,
+        "n": 15,
+        "rate": 0.867,
+        "wilson95": [
+          0.621,
+          0.963
+        ],
+        "label": "13/15",
+        "source": "phase6c_candidate_test_results.csv (miranda-v2 @ 29059a5, states 0-14, unseeded)",
+        "run": "run1"
+      },
+      {
+        "k": 12,
+        "n": 15,
+        "rate": 0.8,
+        "wilson95": [
+          0.548,
+          0.93
+        ],
+        "label": "12/15",
+        "source": "phase6c_candidate_test_results.csv (miranda-v2 @ 29059a5, states 0-14, unseeded)",
+        "run": "run2a"
+      }
+    ],
+    "random_b01": [
+      {
+        "k": 11,
+        "n": 15,
+        "rate": 0.733,
+        "wilson95": [
+          0.48,
+          0.891
+        ],
+        "label": "11/15",
+        "source": "phase6c_candidate_test_results.csv (miranda-v2 @ 29059a5, states 0-14, unseeded)",
+        "run": "run1"
+      },
+      {
+        "k": 12,
+        "n": 15,
+        "rate": 0.8,
+        "wilson95": [
+          0.548,
+          0.93
+        ],
+        "label": "12/15",
+        "source": "phase6c_candidate_test_results.csv (miranda-v2 @ 29059a5, states 0-14, unseeded)",
+        "run": "run2a"
+      }
+    ],
+    "random_b03": [
+      {
+        "k": 8,
+        "n": 15,
+        "rate": 0.533,
+        "wilson95": [
+          0.301,
+          0.752
+        ],
+        "label": "8/15",
+        "source": "phase6c_candidate_test_results.csv (miranda-v2 @ 29059a5, states 0-14, unseeded)",
+        "run": "run2b"
+      }
+    ],
+    "per_step_0": [
+      {
+        "k": 9,
+        "n": 15,
+        "rate": 0.6,
+        "wilson95": [
+          0.357,
+          0.802
+        ],
+        "label": "9/15",
+        "source": "phase6c_candidate_test_results.csv (miranda-v2 @ 29059a5, states 0-14, unseeded)",
+        "run": "run2b"
+      }
+    ],
+    "per_step_9": [
+      {
+        "k": 9,
+        "n": 15,
+        "rate": 0.6,
+        "wilson95": [
+          0.357,
+          0.802
+        ],
+        "label": "9/15",
+        "source": "phase6c_candidate_test_results.csv (miranda-v2 @ 29059a5, states 0-14, unseeded)",
+        "run": "run2b"
+      }
+    ],
+    "pos_only": [
+      {
+        "k": 7,
+        "n": 15,
+        "rate": 0.467,
+        "wilson95": [
+          0.248,
+          0.699
+        ],
+        "label": "7/15",
+        "source": "phase6c_candidate_test_results.csv (miranda-v2 @ 29059a5, states 0-14, unseeded)",
+        "run": "run2c"
+      }
+    ],
+    "paper_native": {
+      "global": "14/15",
+      "per_step": "13/15",
+      "pos_only": "12/15",
+      "base": "8/15"
+    },
+    "pooled": {
+      "global": "25/30",
+      "baseline": "33/45",
+      "random_b01": "23/30"
+    },
+    "p_global_vs_baseline": 0.4032290210807465,
+    "p_global_vs_random": 0.7480497930241055,
+    "p_global_vs_paper_native": 0.6467153096478112,
+    "branches": {
+      "public_branches": 22,
+      "pr_heads": 50,
+      "deep_inspected": 10,
+      "source": "phase6c_branch_matrix.csv"
+    }
+  },
+  "phase7a": {
+    "tasks": {
+      "LR2a": {
+        "paper_base": 0.4,
+        "paper_global": 0.8,
+        "config": "L11 a0.5 b0.3",
+        "H": {
+          "BASELINE": {
+            "k": 14,
+            "n": 30,
+            "rate": 0.467,
+            "wilson95": [
+              0.302,
+              0.639
+            ],
+            "label": "14/30",
+            "source": "phase7a_summary.csv (pooled over 2 repeats; same init states)",
+            "reps": [
+              7,
+              7
+            ],
+            "rep_n": 15
+          },
+          "PAPER_GLOBAL": {
+            "k": 17,
+            "n": 30,
+            "rate": 0.567,
+            "wilson95": [
+              0.392,
+              0.726
+            ],
+            "label": "17/30",
+            "source": "phase7a_summary.csv (pooled over 2 repeats; same init states)",
+            "reps": [
+              10,
+              7
+            ],
+            "rep_n": 15
+          },
+          "RANDOM_CONTROL": {
+            "k": 16,
+            "n": 30,
+            "rate": 0.533,
+            "wilson95": [
+              0.361,
+              0.698
+            ],
+            "label": "16/30",
+            "source": "phase7a_summary.csv (pooled over 2 repeats; same init states)",
+            "reps": [
+              9,
+              7
+            ],
+            "rep_n": 15
+          }
+        },
+        "T": {
+          "BASELINE": {
+            "k": 31,
+            "n": 60,
+            "rate": 0.517,
+            "wilson95": [
+              0.393,
+              0.638
+            ],
+            "label": "31/60",
+            "source": "phase7a_summary.csv (pooled over 2 repeats; same init states)",
+            "reps": [
+              13,
+              18
+            ],
+            "rep_n": 30
+          },
+          "PAPER_GLOBAL": {
+            "k": 35,
+            "n": 60,
+            "rate": 0.583,
+            "wilson95": [
+              0.457,
+              0.699
+            ],
+            "label": "35/60",
+            "source": "phase7a_summary.csv (pooled over 2 repeats; same init states)",
+            "reps": [
+              20,
+              15
+            ],
+            "rep_n": 30
+          },
+          "RANDOM_CONTROL": {
+            "k": 38,
+            "n": 60,
+            "rate": 0.633,
+            "wilson95": [
+              0.507,
+              0.744
+            ],
+            "label": "38/60",
+            "source": "phase7a_summary.csv (pooled over 2 repeats; same init states)",
+            "reps": [
+              18,
+              20
+            ],
+            "rep_n": 30
+          }
+        },
+        "G_H": 0.1,
+        "G_T": 0.0667,
+        "PGG": 0.0333,
+        "p_T_global_vs_base": 0.5822,
+        "p_H_global_vs_base": 0.6058
+      },
+      "KS4": {
+        "paper_base": 0.4,
+        "paper_global": 0.73,
+        "config": "L5 a1.0 b0.1",
+        "H": {
+          "BASELINE": {
+            "k": 16,
+            "n": 30,
+            "rate": 0.533,
+            "wilson95": [
+              0.361,
+              0.698
+            ],
+            "label": "16/30",
+            "source": "phase7a_summary.csv (pooled over 2 repeats; same init states)",
+            "reps": [
+              8,
+              8
+            ],
+            "rep_n": 15
+          },
+          "PAPER_GLOBAL": {
+            "k": 14,
+            "n": 30,
+            "rate": 0.467,
+            "wilson95": [
+              0.302,
+              0.639
+            ],
+            "label": "14/30",
+            "source": "phase7a_summary.csv (pooled over 2 repeats; same init states)",
+            "reps": [
+              8,
+              6
+            ],
+            "rep_n": 15
+          },
+          "RANDOM_CONTROL": {
+            "k": 17,
+            "n": 30,
+            "rate": 0.567,
+            "wilson95": [
+              0.392,
+              0.726
+            ],
+            "label": "17/30",
+            "source": "phase7a_summary.csv (pooled over 2 repeats; same init states)",
+            "reps": [
+              10,
+              7
+            ],
+            "rep_n": 15
+          }
+        },
+        "T": {
+          "BASELINE": {
+            "k": 25,
+            "n": 60,
+            "rate": 0.417,
+            "wilson95": [
+              0.301,
+              0.543
+            ],
+            "label": "25/60",
+            "source": "phase7a_summary.csv (pooled over 2 repeats; same init states)",
+            "reps": [
+              12,
+              13
+            ],
+            "rep_n": 30
+          },
+          "PAPER_GLOBAL": {
+            "k": 30,
+            "n": 60,
+            "rate": 0.5,
+            "wilson95": [
+              0.377,
+              0.623
+            ],
+            "label": "30/60",
+            "source": "phase7a_summary.csv (pooled over 2 repeats; same init states)",
+            "reps": [
+              15,
+              15
+            ],
+            "rep_n": 30
+          },
+          "RANDOM_CONTROL": {
+            "k": 24,
+            "n": 60,
+            "rate": 0.4,
+            "wilson95": [
+              0.286,
+              0.526
+            ],
+            "label": "24/60",
+            "source": "phase7a_summary.csv (pooled over 2 repeats; same init states)",
+            "reps": [
+              10,
+              14
+            ],
+            "rep_n": 30
+          }
+        },
+        "G_H": -0.0667,
+        "G_T": 0.0833,
+        "PGG": -0.15,
+        "p_T_global_vs_base": 0.4638,
+        "p_H_global_vs_base": 0.7965
+      },
+      "LR1": {
+        "paper_base": 0.8,
+        "paper_global": 0.93,
+        "config": "L11 a0.5 b0.3",
+        "H": {
+          "BASELINE": {
+            "k": 15,
+            "n": 30,
+            "rate": 0.5,
+            "wilson95": [
+              0.332,
+              0.668
+            ],
+            "label": "15/30",
+            "source": "phase7a_summary.csv (pooled over 2 repeats; same init states)",
+            "reps": [
+              8,
+              7
+            ],
+            "rep_n": 15
+          },
+          "PAPER_GLOBAL": {
+            "k": 23,
+            "n": 30,
+            "rate": 0.767,
+            "wilson95": [
+              0.591,
+              0.882
+            ],
+            "label": "23/30",
+            "source": "phase7a_summary.csv (pooled over 2 repeats; same init states)",
+            "reps": [
+              8,
+              15
+            ],
+            "rep_n": 15
+          },
+          "RANDOM_CONTROL": {
+            "k": 19,
+            "n": 30,
+            "rate": 0.633,
+            "wilson95": [
+              0.455,
+              0.781
+            ],
+            "label": "19/30",
+            "source": "phase7a_summary.csv (pooled over 2 repeats; same init states)",
+            "reps": [
+              9,
+              10
+            ],
+            "rep_n": 15
+          }
+        },
+        "T": {
+          "BASELINE": {
+            "k": 36,
+            "n": 60,
+            "rate": 0.6,
+            "wilson95": [
+              0.474,
+              0.714
+            ],
+            "label": "36/60",
+            "source": "phase7a_summary.csv (pooled over 2 repeats; same init states)",
+            "reps": [
+              17,
+              19
+            ],
+            "rep_n": 30
+          },
+          "PAPER_GLOBAL": {
+            "k": 44,
+            "n": 60,
+            "rate": 0.733,
+            "wilson95": [
+              0.61,
+              0.829
+            ],
+            "label": "44/60",
+            "source": "phase7a_summary.csv (pooled over 2 repeats; same init states)",
+            "reps": [
+              22,
+              22
+            ],
+            "rep_n": 30
+          },
+          "RANDOM_CONTROL": {
+            "k": 47,
+            "n": 60,
+            "rate": 0.783,
+            "wilson95": [
+              0.664,
+              0.869
+            ],
+            "label": "47/60",
+            "source": "phase7a_summary.csv (pooled over 2 repeats; same init states)",
+            "reps": [
+              25,
+              22
+            ],
+            "rep_n": 30
+          }
+        },
+        "G_H": 0.2667,
+        "G_T": 0.1333,
+        "PGG": 0.1334,
+        "p_T_global_vs_base": 0.1749,
+        "p_H_global_vs_base": 0.0596
+      }
+    },
+    "task_order": [
+      "LR2a",
+      "KS4",
+      "LR1"
+    ],
+    "mean_PGG": 0.0056,
+    "n_episodes": 810,
+    "pooled": {
+      "H": {
+        "BASELINE": "45/90",
+        "PAPER_GLOBAL": "54/90",
+        "RANDOM_CONTROL": "52/90",
+        "global_vs_base_CMH_p": 0.231,
+        "global_vs_random_CMH_p": 0.879
+      },
+      "T": {
+        "BASELINE": "92/180",
+        "PAPER_GLOBAL": "109/180",
+        "RANDOM_CONTROL": "109/180",
+        "global_vs_base_CMH_p": 0.086,
+        "global_vs_random_CMH_p": 0.912
+      }
+    },
+    "case": "A",
+    "operators": [
+      {
+        "task": "KS3",
+        "operator": "PAPER_GLOBAL",
+        "layer": 5.0,
+        "alpha": 0.5,
+        "beta": 0.1,
+        "n_token_vectors": 11500.0,
+        "rel_dh": 0.09667,
+        "cos_dh_h": -0.99962,
+        "quota": 0.00414,
+        "hCh": 0.0337,
+        "overlap_s_f": 0.9927
+      },
+      {
+        "task": "KS3",
+        "operator": "RANDOM_CONTROL",
+        "layer": 5.0,
+        "alpha": 0.5,
+        "beta": 0.1,
+        "n_token_vectors": 11500.0,
+        "rel_dh": 0.08347,
+        "cos_dh_h": -0.98882,
+        "quota": 0.17457,
+        "hCh": 0.17464,
+        "overlap_s_f": null
+      },
+      {
+        "task": "LR2a",
+        "operator": "PAPER_GLOBAL",
+        "layer": 11.0,
+        "alpha": 0.5,
+        "beta": 0.3,
+        "n_token_vectors": 13000.0,
+        "rel_dh": 0.28851,
+        "cos_dh_h": -0.99874,
+        "quota": 0.01257,
+        "hCh": 0.03953,
+        "overlap_s_f": 0.951
+      },
+      {
+        "task": "LR2a",
+        "operator": "RANDOM_CONTROL",
+        "layer": 11.0,
+        "alpha": 0.5,
+        "beta": 0.3,
+        "n_token_vectors": 13000.0,
+        "rel_dh": 0.25018,
+        "cos_dh_h": -0.98778,
+        "quota": 0.17963,
+        "hCh": 0.17626,
+        "overlap_s_f": null
+      },
+      {
+        "task": "KS4",
+        "operator": "PAPER_GLOBAL",
+        "layer": 5.0,
+        "alpha": 1.0,
+        "beta": 0.1,
+        "n_token_vectors": 13200.0,
+        "rel_dh": 0.09854,
+        "cos_dh_h": -0.99946,
+        "quota": 0.0082,
+        "hCh": 0.01515,
+        "overlap_s_f": 0.9838
+      },
+      {
+        "task": "KS4",
+        "operator": "RANDOM_CONTROL",
+        "layer": 5.0,
+        "alpha": 1.0,
+        "beta": 0.1,
+        "n_token_vectors": 13200.0,
+        "rel_dh": 0.08347,
+        "cos_dh_h": -0.98883,
+        "quota": 0.17457,
+        "hCh": 0.1746,
+        "overlap_s_f": null
+      },
+      {
+        "task": "LR1",
+        "operator": "PAPER_GLOBAL",
+        "layer": 11.0,
+        "alpha": 0.5,
+        "beta": 0.3,
+        "n_token_vectors": 11200.0,
+        "rel_dh": 0.28683,
+        "cos_dh_h": -0.9979,
+        "quota": 0.01679,
+        "hCh": 0.04589,
+        "overlap_s_f": 0.9471
+      },
+      {
+        "task": "LR1",
+        "operator": "RANDOM_CONTROL",
+        "layer": 11.0,
+        "alpha": 0.5,
+        "beta": 0.3,
+        "n_token_vectors": 11200.0,
+        "rel_dh": 0.25016,
+        "cos_dh_h": -0.98774,
+        "quota": 0.17963,
+        "hCh": 0.17636,
+        "overlap_s_f": null
+      }
+    ],
+    "global_cos_range": [
+      -0.99962,
+      -0.9979
+    ]
+  }
+}

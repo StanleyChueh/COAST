@@ -1,0 +1,15 @@
+{
+  "name": "coast-reproduction-deck",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Regenerable research deck for the COAST reproduction study",
+  "scripts": {
+    "extract": "cd .. && uv run --no-sync python presentation/extract_data.py",
+    "build": "node build_slides.js",
+    "all": "npm run extract && npm run build"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0",
+    "pptxgenjs": "^4.0.1"
+  }
+}

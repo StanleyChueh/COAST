@@ -1,0 +1,104 @@
+# Phase 7A — Cross-task historical-vs-held-out protocol validation (pi0.5, LIBERO-10)
+phase: 7A
+date: 2026-09-25
+branch: exp/cross-task-protocol-validation   # created at base (did not exist); HEAD == base
+base_sha: ea7bfb0cf89611ee685e801d6690f031e5d2942a
+paper: arXiv:2605.17144v1
+
+preregistration:
+  file: research/reproduction/phase7a_preregistration.md
+  sha256: 082935528d2cc92c88d33e4cdd157dfc50e09a79d8571fa831e46c5fe6639b5a
+  frozen_at: "2026-09-25T16:44:44+08:00 (before any Phase 7A rollout)"
+  eligible: [KS4, KS8, LR1, LR2a, LR2b, LR6, ST1]   # Table 21 S>=3 and F>=3, KS3 excluded
+  ineligible: [KS6 (2 S), LR5 (1 S)]
+  paper_global_minus_base: {KS4: 0.33, KS8: 0.27, LR1: 0.13, LR2a: 0.40, LR2b: 0.33, LR6: 0.34, ST1: 0.26}
+  median: 0.33
+  selected:
+    A: {task: LR2a, task_id: 0, rule: largest, paper_base: 0.40, paper_global: 0.80, config: {layer: 11, alpha: 0.5, beta: 0.3}}
+    B: {task: KS4, task_id: 3, rule: "closest to median (tie with LR2b -> paper table order)", paper_base: 0.40, paper_global: 0.73, config: {layer: 5, alpha: 1.0, beta: 0.1}}
+    C: {task: LR1, task_id: 7, rule: smallest, paper_base: 0.80, paper_global: 0.93, config: {layer: 11, alpha: 0.5, beta: 0.3}}
+  robustness: "k/15 reading of decimals yields the same A/B/C"
+  config_crosscheck: "Table 4 Global = Table 17 for all three"
+
+protocol:
+  candidate: {branch: upstream/miranda-v2, sha: 29059a537ce123abdab7a4e164db0c72eeff8024, worktree: ../COAST-paper-candidate, modified: false}
+  fit_data: "brandonyang/pi05-libero-activations-v1-2000-15env@3e3a8fe22222b1b96124a059f9c964ff2ac9f0c0 (suffix_residual + episode metadata only)"
+  fit_counts_verified: {LR2a: "6/9", KS4: "6/9", LR1: "12/3"}   # builder output == paper Table 21
+  builder: "candidate for_subin/build_conceptors.py, defaults; run once per task on a single-task input dir (builder is per-task independent)"
+  builder_samples: {LR2a: "(356,936)", KS4: "(378,936)", LR1: "(801,312)"}   # pooled vectors at ds 0
+  checkpoint: "checkpoints/openpi-libero-2000 (HF rev aaeeabc72f8a; conversion hash matched)"
+  conditions:
+    BASELINE: baseline
+    PAPER_GLOBAL: "global_L{l}_a{a}_b{b}; C_contrastive from NPZ; hook h @ ((1-b)I+bC).T on action-expert layer l, all tokens, all 10 denoising steps"
+    RANDOM_CONTROL: "random_L{l}_b{b}; candidate compute_random_conceptor(seed=l*100+int(10b))"
+  arms:
+    H: {episodes: 15, init_states: "0-14", client: "unmodified candidate main.py (initial_states[episode])"}
+    T: {episodes: 30, init_states: "15-44", client: "tools/phase7a_state_window_client.py (state selection only)"}
+  identical_between_arms: [NPZ, driver, server, hook, policy code, env.seed(7), np.random.seed(7), max_steps 520, replan 5, unseeded policy noise]
+  repeats: 2 independent driver invocations per (task, arm); repeat 1 on GPU 0, repeat 2 on GPU 1
+  helpers:
+    - research/reproduction/tools/phase7a_candidate_driver.py   # imports unmodified candidate driver; replaces run_single_task_eval only (client selection + log capture)
+    - research/reproduction/tools/phase7a_state_window_client.py  # shifts get_task_init_states by offset; logs state map + sha1
+  state_window_verification: "offline: shifted[k] == original[15+k] for task_ids 0,3,7; runtime: phase7a_state_map lines checked for every Arm-T condition"
+  adaptations: [OPENPI_DATA_HOME per task (tokenizer copied), LIBERO_CONFIG_PATH, GPU ids, ports 8800-8805 / 8900-8905, output dirs, SLURM -> local queue runner, PYTHONPATH to candidate src + openpi-client]
+  runs:
+    - {gpu: 0, repeat: 1, order: [KS4 H 8800, KS4 T 8801, LR1 H 8802, LR1 T 8803, LR2a H 8804, LR2a T 8805]}
+    - {gpu: 1, repeat: 2, order: [KS4 H 8900, KS4 T 8901, LR1 H 8902, LR1 T 8903, LR2a H 8904, LR2a T 8905]}
+  wall_clock: "2026-09-25 17:37 -> 19:34 (+08:00); all 12 invocations rc=0"
+  episodes_total: 810
+  infrastructure_incidents:
+    - "HF download stalls -> replaced by per-file curl with stall detection; all 3,764 needed files verified (size) / per-episode step counts matched metadata"
+    - "first queue launch: wrapper renamed the NPZ temp file incorrectly (np.savez appends .npz) -> 'prep failed' before any rollout; fixed and relaunched; no rollouts affected"
+
+outputs:
+  episode_csv: {path: research/reproduction/experiments/phase7a_episode_results.csv, rows: 810, sha256: 27c022a861e32316ffe273f8e3b5a4d3ae15b2e6a7d342f3a0611e6607d0af73}
+  summary_csv: {path: research/reproduction/experiments/phase7a_summary.csv, sha256: ecfd5789f84b0218c2e014042dec49f39b7d31874efc5c9fd0ca8abff7d18a6e}
+  analysis_json: {path: research/reproduction/experiments/phase7a_analysis.json, sha256: 29068153fc745c8a128d4f1d00473800416ff3f3431b1e15a647a3fe7aba0767}
+  frozen_at: "2026-09-25T19:38:53+08:00 (before exploratory diagnostics)"
+  cross_checks: "log-derived success == driver summary.json for all 36 cells; video length consistent with success for all 810 episodes; Arm-T state maps == 15..44"
+
+results:   # successes/n; per repeat [r1, r2]; pooled
+  LR2a:
+    H: {BASELINE: {reps: [7, 7], pooled: "14/30"}, PAPER_GLOBAL: {reps: [10, 7], pooled: "17/30"}, RANDOM_CONTROL: {reps: [9, 7], pooled: "16/30"}}
+    T: {BASELINE: {reps: [13, 18], pooled: "31/60"}, PAPER_GLOBAL: {reps: [20, 15], pooled: "35/60"}, RANDOM_CONTROL: {reps: [18, 20], pooled: "38/60"}}
+    G_H: 0.100
+    G_T: 0.067
+    PGG: 0.033
+  KS4:
+    H: {BASELINE: {reps: [8, 8], pooled: "16/30"}, PAPER_GLOBAL: {reps: [8, 6], pooled: "14/30"}, RANDOM_CONTROL: {reps: [10, 7], pooled: "17/30"}}
+    T: {BASELINE: {reps: [12, 13], pooled: "25/60"}, PAPER_GLOBAL: {reps: [15, 15], pooled: "30/60"}, RANDOM_CONTROL: {reps: [10, 14], pooled: "24/60"}}
+    G_H: -0.067
+    G_T: 0.083
+    PGG: -0.150
+  LR1:
+    H: {BASELINE: {reps: [8, 7], pooled: "15/30"}, PAPER_GLOBAL: {reps: [8, 15], pooled: "23/30"}, RANDOM_CONTROL: {reps: [9, 10], pooled: "19/30"}}
+    T: {BASELINE: {reps: [17, 19], pooled: "36/60"}, PAPER_GLOBAL: {reps: [22, 22], pooled: "44/60"}, RANDOM_CONTROL: {reps: [25, 22], pooled: "47/60"}}
+    G_H: 0.267
+    G_T: 0.133
+    PGG: 0.133
+  mean_PGG: 0.006
+  fisher_global_vs_baseline_pooled: {LR2a: {H: 0.606, T: 0.582}, KS4: {H: 0.797, T: 0.464}, LR1: {H: 0.060, T: 0.175}}
+  fisher_global_vs_random_pooled: {LR2a: {H: 1.0, T: 0.709}, KS4: {H: 0.606, T: 0.359}, LR1: {H: 0.399, T: 0.670}}
+  cross_task_pooled:
+    H: {BASELINE: "45/90", PAPER_GLOBAL: "54/90", RANDOM_CONTROL: "52/90", global_vs_base_CMH_p: 0.231, global_vs_random_CMH_p: 0.879}
+    T: {BASELINE: "92/180", PAPER_GLOBAL: "109/180", RANDOM_CONTROL: "109/180", global_vs_base_CMH_p: 0.086, global_vs_random_CMH_p: 0.912}
+  between_repeat: "17 of 18 repeat pairs p>0.29; LR1 H PAPER_GLOBAL 8/15 vs 15/15 (p=0.006, one of 18 tests); totals rep1 229 vs rep2 232 (no GPU/repeat effect)"
+  paper_vs_our_historical_global: {LR2a: "paper 12/15 vs 17/30 (p=0.19)", KS4: "paper 11/15 vs 14/30 (p=0.12)", LR1: "paper 14/15 vs 23/30 (p=0.24)"}
+  our_H_baseline_vs_authors_fit: {LR2a: "14/30 vs 6/15 (p=0.76)", KS4: "16/30 vs 6/15 (p=0.53)", LR1: "15/30 vs 12/15 (p=0.063)"}
+  non_independence: "pooled episodes re-use identical init states across repeats; per-state 0/1/2 success counts in phase7a_analysis.json"
+
+exploratory_diagnostics:   # computed after freeze; offline; research/reproduction/experiments/phase7a_operator_diagnostics.csv
+  PAPER_GLOBAL:
+    KS3: {config: L5 a0.5 b0.1, rel_dh: 0.0967, cos_dh_h: -0.9996, quota: 0.0041, hCh: 0.0337, overlap: 0.993}
+    LR2a: {config: L11 a0.5 b0.3, rel_dh: 0.2885, cos_dh_h: -0.9987, quota: 0.0126, hCh: 0.0395, overlap: 0.951}
+    KS4: {config: L5 a1.0 b0.1, rel_dh: 0.0985, cos_dh_h: -0.9995, quota: 0.0082, hCh: 0.0152, overlap: 0.984}
+    LR1: {config: L11 a0.5 b0.3, rel_dh: 0.2868, cos_dh_h: -0.9979, quota: 0.0168, hCh: 0.0459, overlap: 0.947}
+  RANDOM_CONTROL: {L5_b0.1: {rel_dh: 0.0835, cos_dh_h: -0.9888, quota: 0.175}, L11_b0.3: {rel_dh: 0.250, cos_dh_h: -0.9878, quota: 0.180}}
+
+decision:
+  preregistered_case: A   # G_H > G_T in 2/3 tasks (LR2a, LR1) and COAST not clearly better than baseline/random in Arm T in 3/3
+  caveat: "protocol-gap component weak and inconsistent (PGG +0.03, -0.15, +0.13; mean +0.006); the robust part is the absence of a held-out advantage over the matched random control (pooled 109/180 vs 109/180)"
+  limitation_scope: general   # not KS3-specific: conceptor-specific held-out gain absent in all 4 studied tasks; small nonspecific gain vs baseline possible (+0.094, CMH p=0.086)
+  phase_7b_justified: "yes, as a mechanism-first phase with pre-registered held-out evaluation and random/shrinkage controls"
+
+not_done: [no new steering method, no tuning, no rebuild on held-out data, no commits, no pushes, no author contact]

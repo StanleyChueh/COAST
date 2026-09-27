@@ -1,0 +1,150 @@
+# Phase 7B — Paired mechanism decomposition: ORIGINAL_COAST vs PURE_SHRINKAGE (pi0.5, LIBERO-10, held-out states)
+# Report: research/reproduction/phase7b_paired_mechanism_decomposition.md
+phase: 7B
+date: 2026-09-26
+branch: exp/paired-mechanism-decomposition
+base_sha: 4356a576125826bd65e4c6f2391110e947377d21   # Phase 7A (HEAD at start; working tree clean)
+paper: arXiv:2605.17144
+implementation_baseline: "closest documented public pipeline: upstream/miranda-v2 @ 29059a537ce123abdab7a4e164db0c72eeff8024 (worktree ../COAST-paper-candidate, unmodified); NOT claimed to be the unpublished final-paper implementation"
+author_clarification: "author-provided context: initial runs 15 rollouts, later reruns 30; later work on an unpublished branch; public branch is old; Torch randomness not fixed initially"
+
+preregistration:
+  file: research/reproduction/phase7b_preregistration.md
+  sha256: dd1a86bf19cff7a317f5daad5360e850b60b5e9e98503357d53ae557a50df280
+  frozen_at: "2026-09-26T14:11:26+08:00 (before any Phase 7B rollout; only synthetic-observation GPU checks had run)"
+  frozen_copy: "<scratch>/phase7b/phase7b_preregistration.frozen.md"
+
+design:
+  tasks:
+    LR2a: {task_id: 0, layer: 11, alpha: 0.5, beta: 0.3, npz_sha256: eef08a12612bac7544120e9992d0ae675ad0f0478c1d75a8d553b6af9f47b1dc}
+    KS4: {task_id: 3, layer: 5, alpha: 1.0, beta: 0.1, npz_sha256: 7bf9e02f2768e1ea97402d1ad09bed33fcc0186ab5ec72c33817289a2b093c9e}
+    LR1: {task_id: 7, layer: 11, alpha: 0.5, beta: 0.3, npz_sha256: 6fda3c1d9aaf0d4ca6a58beefaacf7d810f555726e543ca76a970026ec3c274e}
+  conceptors: "exact Phase 7A NPZs (candidate for_subin/build_conceptors.py defaults, authors' fit activations @3e3a8fe2, built 2026-09-25 17:37); hard-linked into the Phase 7B scratch; never rebuilt; never fit on held-out states"
+  checkpoint: "checkpoints/openpi-libero-2000 (HF brandonyang/openpi-libero-2000 rev aaeeabc72f8a)"
+  state_window: "held-out init states 15-44 (state_offset 15, 30 episodes)"
+  conditions:   # fixed order within each invocation; all steered conditions = candidate ConceptorSteeringHook, h' = h @ M.to(h.dtype).T
+    BASELINE: "no hook (candidate SteeredPolicyWrapper -> Policy.infer)"
+    ORIGINAL_COAST: "M = (1-b)I + b C_contrastive"
+    PURE_SHRINKAGE: "M = (1-b)I + b*0 = (1-b)I (candidate hook built from a d x d float32 zero matrix)"
+    RANDOM_CONTROL: "M = (1-b)I + b C_rand, C_rand = candidate compute_random_conceptor(seed = 100*layer + int(10*b)) -> seeds 1103 (L11 b0.3), 501 (L5 b0.1)"
+  hook_location: "forward hook on paligemma_with_expert.gemma_expert.model.layers[layer] (action expert), all suffix/action tokens (10), all 10 denoising steps, bf16 hidden state"
+  fixed: [unmodified candidate client, env.seed(7), np.random.seed(7), max_steps 520, 10 settle steps, replan 5, TORCH_COMPILE_DISABLE=1, LIBERO_CONFIG_PATH]
+  paired_noise:
+    scheme: "Phase 1D, reused unchanged: numpy Generator(PCG64(SeedSequence([master_seed, task_id, init_state, rollout_step]))).standard_normal((10,32), float32)"
+    code: "main-repo src/openpi/serving/noise_control.py (derive_noise, noise_fingerprint) + packages/openpi-client/src/openpi_client/noise_control.py, loaded by path"
+    repeat_encoding: "master_seed (repeat 1 = 100, repeat 2 = 200), one-to-one"
+    denoising_sample_identity: "one initial noise tensor per request; 10 Euler steps deterministic given it"
+    rollout_step: "client counts env.step calls since set_init_state minus 10; asserted == 5 * request index"
+    injection: "tools/phase7b_paired_driver.py PairedNoiseWrapper (outermost) shadows Policy._sample_actions (BASELINE) / model.sample_actions_with_steering (steered) per request with noise=torch.from_numpy(noise).to(device)[None]; fingerprints the tensor handed to the sampler; exactly one sampler call asserted"
+    golden_fingerprint_100_2_15_0: 87ae314ae03d4e549d3bfa442c28cb94f594bff03d5c196422ae8b165ab113a0   # checked at every driver start
+  repeats: 2
+  episodes_total: 720
+
+helpers:   # research/reproduction/tools/
+  runtime (byte-identical to what ran):
+    phase7b_paired_driver.py: ac70ff2e27aac7606fa1fc13a3be22d52d5182fcfd3f1131783224d163844ee6
+    phase7b_paired_client.py: 04f781f28302ac9c9691359e31600cd8df5555b2a9d3ea07706adae1137f2053
+  pre_rollout_check: phase7b_gpu_checks.py
+  analysis: [analyze_phase7b.py, phase7b_operator_decomposition.py, analyze_phase7b_exploratory.py]
+  exploratory_probe: [phase7b_probe_observations.py, phase7b_action_probe.py]
+  ruff: "analysis/probe scripts clean; the two runtime helpers keep cosmetic findings (unused import, redundant noqa, subprocess check=) and were not edited after launch"
+
+pre_rollout_gpu_checks:   # synthetic observation, real checkpoint, GPU 0; no LIBERO, no outcome
+  sampler_noise_identical_all_4_conditions: true
+  different_keys_different_noise: true
+  same_key_twice_max_abs_action_diff: 0.0     # all conditions, all 3 tasks
+  baseline_path_vs_identity_hook_max_abs_diff: 0.0   # Policy.infer(noise) vs steering sampler with beta=0 hook
+  pure_shrinkage:
+    M_equals_(1-b)I_fp32: true
+    fp32_output_exact_at_highest_precision: true      # max |diff| 0.0
+    fp32_tf32_rel_err: "2.5e-4 to 3.6e-4 (model sets float32_matmul_precision('high'); unused at runtime, h is bf16)"
+    bf16_bit_identical_to_bf16_scalar_multiply: true
+    bf16_applied_factor: {beta_0.3: 0.69921875, beta_0.1: 0.8984375}
+    bf16_max_rel_err_vs_exact: {beta_0.3: 0.0019, beta_0.1: 0.0027}
+  smoke_test: "after freeze: KS4, init state 0, max_steps 15, 4 conditions; identical noise SHA at rollout steps 0/5/10 in all 4; correct sampler paths; not a result"
+
+execution:
+  queue: "<scratch>/phase7b/run_queue.sh; order KS4 -> LR1 -> LR2a per GPU"
+  runs:
+    - {gpu: 0, repeat: 1, master_seed: 100, ports: {KS4: 8810, LR1: 8811, LR2a: 8812}}
+    - {gpu: 1, repeat: 2, master_seed: 200, ports: {KS4: 8910, LR1: 8911, LR2a: 8912}}
+  wall_clock: "2026-09-26 14:12:40 -> 15:50:19 (+08:00); all 6 invocations rc=0; no reruns"
+  output_root: "/tmp/claude-1000/-home-stanley-Stanley-ws-COAST-research-COAST/79f17b80-c3cb-44a7-93eb-68f24af75be0/scratchpad/phase7b/runs (not in git)"
+  incidents:
+    - "analysis cross-check initially compared the exact log-derived rate with the client's %.2f-printed success_rate; changed to compare at 2 decimals (analysis only)"
+    - "KS4 scene: a fixed wooden fixture's pose is re-randomized on every env.reset() and is not in the MuJoCo state restored by set_init_state; verified it depends only on the reset count (identical first images after 0/37/200/520 random steps between resets), so all conditions/repeats saw identical first observations per state"
+
+outputs:
+  frozen_at: "2026-09-26T15:52:15+08:00 (before exploratory probe/decomposition)"
+  episode_csv: {path: research/reproduction/experiments/phase7b_episode_results.csv, rows: 720, sha256: 180c880518def9bd0021a2c60ebadbaf1eb752d4b4df2237591246f92bffacfd}
+  summary_csv: {path: research/reproduction/experiments/phase7b_summary.csv, sha256: eb3186d7adc301d4d79c202174927b59372a10150b40895df2debfe37621306a}
+  paired_tables_csv: {path: research/reproduction/experiments/phase7b_paired_tables.csv, sha256: 46a2eff2b09f81168e29df803deeba5aa6f8eb2936871eccdd7b5778a18293e6}
+  analysis_json: {path: research/reproduction/experiments/phase7b_analysis.json, sha256: 4a31bbc0291587583fc0daff8307977acbddd8cc4ee0b9adb2a494e14d94b837}
+  operator_decomposition_csv: research/reproduction/experiments/phase7b_operator_decomposition.csv
+  exploratory: [research/reproduction/experiments/phase7b_action_probe.csv, research/reproduction/experiments/phase7b_exploratory.json]
+
+noise_verification:
+  fingerprints_recomputed_independently: 112012   # client + server logs, every request
+  unique_keys: 17258
+  shared_coordinate_pairs_identical: "36 (task, repeat, condition-pair) cells, 1809-2283 shared (init_state, rollout_step) coordinates each, 100% identical"
+  cross_repeat_shared_fingerprints: 0
+  sampler_sha_equals_derived_sha: "every request"
+  probe_crosscheck: "720 probe requests (rollout_step 0) match the primary episodes' noise_verification_hash"
+  sample_first16hex:
+    LR2a_s15_t0: {rep1_all4: 4efa91b8661f920b, rep2_all4: 04d11ad2e5fd9694}
+    KS4_s22_t100: {rep1_all4: 439ed454524deb87, rep2_all4: 6f4794012e03df65}
+    LR1_s29_t200: {rep1_all4: 342e6319d60a264c, rep2_all4: 13248b6f53ae15b4}
+
+results:   # successes per repeat [r1, r2] / 30; pooled / 60
+  LR2a: {BASELINE: [13, 20, 33], ORIGINAL_COAST: [18, 17, 35], PURE_SHRINKAGE: [21, 22, 43], RANDOM_CONTROL: [19, 21, 40]}
+  KS4: {BASELINE: [16, 21, 37], ORIGINAL_COAST: [21, 15, 36], PURE_SHRINKAGE: [16, 16, 32], RANDOM_CONTROL: [15, 16, 31]}
+  LR1: {BASELINE: [17, 18, 35], ORIGINAL_COAST: [22, 18, 40], PURE_SHRINKAGE: [27, 20, 47], RANDOM_CONTROL: [22, 22, 44]}
+  paired:   # b = COAST-only, c = other-only; exact McNemar per repeat; RD pooled; state-cluster bootstrap 95% (10k, seed 7070)
+    COAST_vs_SHRINKAGE:
+      LR2a: {rep1: {b: 4, c: 7, p: 0.549}, rep2: {b: 1, c: 6, p: 0.125}, rd: [-0.100, -0.167], pooled_rd: -0.133, ci: [-0.250, -0.017], clear: true, direction: negative}
+      KS4: {rep1: {b: 7, c: 2, p: 0.180}, rep2: {b: 3, c: 4, p: 1.0}, rd: [0.167, -0.033], pooled_rd: 0.067, ci: [-0.067, 0.200], clear: false}
+      LR1: {rep1: {b: 2, c: 7, p: 0.180}, rep2: {b: 2, c: 4, p: 0.688}, rd: [-0.167, -0.067], pooled_rd: -0.117, ci: [-0.233, 0.000], clear: false, note: "CI upper bound exactly 0 -> does not exclude 0 (borderline)"}
+      cross_task_mean_rd: {value: -0.061, ci: [-0.133, 0.006], signs: [-1, 1, -1]}
+    COAST_vs_RANDOM:
+      LR2a: {rep1: {b: 4, c: 5, p: 1.0}, rep2: {b: 4, c: 8, p: 0.388}, pooled_rd: -0.083, ci: [-0.233, 0.067], clear: false}
+      KS4: {rep1: {b: 8, c: 2, p: 0.109}, rep2: {b: 5, c: 6, p: 1.0}, pooled_rd: 0.083, ci: [-0.067, 0.217], clear: false}
+      LR1: {rep1: {b: 5, c: 5, p: 1.0}, rep2: {b: 4, c: 8, p: 0.388}, pooled_rd: -0.067, ci: [-0.233, 0.100], clear: false}
+      cross_task_mean_rd: {value: -0.022, ci: [-0.117, 0.067]}
+    COAST_vs_BASELINE:
+      LR2a: {rep1: {b: 9, c: 4, p: 0.267}, rep2: {b: 5, c: 8, p: 0.581}, pooled_rd: 0.033, ci: [-0.150, 0.217], clear: false}
+      KS4: {rep1: {b: 10, c: 5, p: 0.302}, rep2: {b: 1, c: 7, p: 0.070}, pooled_rd: -0.017, ci: [-0.183, 0.150], clear: false}
+      LR1: {rep1: {b: 8, c: 3, p: 0.227}, rep2: {b: 6, c: 6, p: 1.0}, pooled_rd: 0.083, ci: [-0.067, 0.233], clear: false}
+      cross_task_mean_rd: {value: 0.033, ci: [-0.061, 0.128]}
+  mcnemar_p_below_0.05_any_repeat_any_primary_or_secondary_comparison: none
+
+operator_decomposition:   # exact_fp64, implemented row form (h @ C.T); fit set / held-out first-observation set
+  C_asymmetry_fro_rel: {LR2a: 0.458, KS4: 0.347, LR1: 0.441}
+  C_eig_range: {LR2a: [-2e-6, 0.385], KS4: [-4e-6, 0.491], LR1: [-1e-6, 0.504]}
+  ORIGINAL_COAST:
+    LR2a: {rel_delta_coast: [0.2885, 0.2884], rel_delta_shrink: 0.30, rel_r_C: [0.0186, 0.0185], r_C_over_delta_coast: [0.065, 0.064], cos_dcoast_dshrink: [0.99874, 0.99878], cos_dcoast_h: [-0.99874, -0.99878], cos_rC_h: [0.640, 0.647], hCh: [0.0395, 0.0398], quota: 0.0126, overlap_s_f: 0.951}
+    KS4: {rel_delta_coast: [0.0985, 0.0985], rel_delta_shrink: 0.10, rel_r_C: [0.0034, 0.0034], r_C_over_delta_coast: [0.035, 0.035], cos_dcoast_dshrink: [0.99946, 0.99947], cos_dcoast_h: [-0.99946, -0.99947], cos_rC_h: [0.439, 0.443], hCh: [0.0151, 0.0153], quota: 0.0082, overlap_s_f: 0.984}
+    LR1: {rel_delta_coast: [0.2868, 0.2861], rel_delta_shrink: 0.30, rel_r_C: [0.0229, 0.0242], r_C_over_delta_coast: [0.080, 0.085], cos_dcoast_dshrink: [0.99790, 0.99765], cos_dcoast_h: [-0.99790, -0.99765], cos_rC_h: [0.604, 0.604], hCh: [0.0459, 0.0486], quota: 0.0168, overlap_s_f: 0.947}
+  RANDOM_CONTROL: {r_C_over_delta: 0.26, cos_ddelta_dshrink: 0.988, hCh: 0.175, quota: [0.175, 0.180]}
+  decomposition_rel_error_max: 7.6e-15
+  realized_bf16: "same picture; r_C/delta_coast 0.052-0.087; applied shrink factors 0.69921875 / 0.8984375"
+  geometry_supports_contraction_dominance: "yes: cos(delta_coast, delta_shrink) >= 0.9976 and ||r_C||/||delta_coast|| <= 0.085 in all tasks (prereg thresholds 0.99 / 0.2)"
+
+exploratory_action_probe:   # first request of each primary episode: identical observation + identical noise, 60 per task
+  LR2a: {coast_minus_base: 0.484, shrink_minus_base: 0.519, coast_minus_shrink: 0.049, cos_deltas: 0.997, ratio: 0.095}
+  KS4: {coast_minus_base: 0.163, shrink_minus_base: 0.170, coast_minus_shrink: 0.010, cos_deltas: 0.999, ratio: 0.058}
+  LR1: {coast_minus_base: 0.479, shrink_minus_base: 0.540, coast_minus_shrink: 0.116, cos_deltas: 0.980, ratio: 0.217}
+exploratory_paired_not_preregistered:
+  SHRINKAGE_vs_BASELINE: {LR2a: {rd: 0.167, ci: [-0.017, 0.350]}, KS4: {rd: -0.083, ci: [-0.267, 0.100]}, LR1: {rd: 0.200, ci: [0.033, 0.367], rep1_mcnemar_p: 0.013, rep2_mcnemar_p: 0.791}}
+  RANDOM_vs_SHRINKAGE: {LR2a: {rd: -0.050, ci: [-0.200, 0.100]}, KS4: {rd: -0.017, ci: [-0.167, 0.150]}, LR1: {rd: -0.050, ci: [-0.200, 0.100]}}
+
+decision:
+  preregistered_case: C
+  basis: "only one task (LR2a) meets the preregistered 'clear difference' rule for COAST vs SHRINKAGE, and its direction is NEGATIVE (COAST < SHRINKAGE); KS4 and LR1 not clear; Case B requires >= 2 clear positive tasks"
+  caveats:
+    - "the LR2a 'clear' call rests on the bootstrap criterion (CI [-0.250, -0.017]); per-repeat McNemar p = 0.55 / 0.125; no McNemar p < 0.05 in any repeat of any comparison"
+    - "9 task x comparison cells tested; one CI excluding 0 at about the 5% level is compatible with chance"
+    - "no task shows a positive conceptor-specific contribution; cross-task mean RD(COAST - SHRINKAGE) = -0.061 [-0.133, +0.006]"
+  wording: "The contribution of the learned conceptor is task dependent (preregistered Case C); where a difference was detectable it was negative, and no task showed behavior beyond contraction in COAST's favor."
+  phase_8: "per prereg Case C: geometry-aware / task-adaptive steering; any such method must beat PURE_SHRINKAGE at matched contraction on held-out states under paired noise (see report section 18)"
+
+not_done: [no new steering method, no Phase 8 implementation, no tuning, no rebuild of conceptors, no modification of miranda-v2 worktree, no modification of Phase 7A records, no presentation/ changes, no commits, no pushes]

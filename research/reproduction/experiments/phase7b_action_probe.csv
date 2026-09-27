@@ -1,0 +1,4 @@
+task,n_observations,noise_hashes_matching_primary,a_base_norm,coast_minus_base,shrink_minus_base,random_minus_base,coast_minus_shrink,coast_minus_random,cos_coastdelta_shrinkdelta,cos_coastdelta_shrinkdelta_min,cos_randdelta_shrinkdelta,ratio_coast_shrink_over_shrink_base
+LR2a,60,240,3.2223,0.48378,0.51859,0.40933,0.0491,0.10119,0.99712,0.98136,0.98839,0.09468
+KS4,60,240,3.44133,0.16325,0.16967,0.13945,0.00981,0.02833,0.99892,0.99605,0.9945,0.05821
+LR1,60,240,3.50746,0.47933,0.54042,0.40892,0.11577,0.10806,0.97978,0.93997,0.98941,0.21687

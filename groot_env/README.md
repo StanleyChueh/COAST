@@ -163,6 +163,18 @@ Supported strategies match the shared client protocol: `global`, `per_step`,
 `per_step_0..per_step_3` keys by default because the published RoboCasa server
 runs 4 denoising steps.
 
+## Adaptive Action Chunking (AAC)
+
+`serve.py --aac` reproduces the official AAC GR00T server ([arXiv:2604.04161](https://arxiv.org/abs/2604.04161); [gr00t-multi-sample@11e926b](https://github.com/Adaptive-Action-Chunking/gr00t-multi-sample), [robocasa@fed3e6b](https://github.com/Adaptive-Action-Chunking/robocasa)). Each request draws N candidate chunks in one batched pass: one backbone forward, then the DiT runs on N independent noise samples. The server reseeds with 42 before every call, as upstream's `seed_per_step` does, and runs the upstream selector (`aac.py`, a verbatim port). It returns candidate 0's (16, 12) chunk plus `aac_horizon` and per-call diagnostics. Plain (non-`--aac`) serving is unchanged and bit-identical to `main`.
+
+```bash
+cd groot_env
+CUDA_VISIBLE_DEVICES=0 uv run python serve.py --port 8000 --aac   # N=20, seed 42, move_th 3.0 (upstream defaults)
+# options: --aac-num-samples N  --aac-seed {int|None}  --aac-move-th A  --aac-return-candidates
+```
+
+Clients choose the execution horizon: `main.py --execution_mode aac` executes `aac_horizon` actions; `--execution_mode fixed --replan_steps h` executes h actions of the same candidate 0, which is how upstream ran its fixed-h baselines. `--aac` is mutually exclusive with `--steer` and `--collect_activations`. Reproduction docs, scripts and results live in [`experiments/aac/`](../experiments/aac/).
+
 ## Results
 
 Robocasa atomic-seen, 15 ep/task, `multitask_learning/checkpoint-120000`:

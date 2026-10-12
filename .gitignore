@@ -200,3 +200,6 @@ cython_debug/
 output/
 
 .vscode/
+
+# Upstream reference clones (e.g. external/aac/: official AAC repos, see experiments/aac/)
+external/

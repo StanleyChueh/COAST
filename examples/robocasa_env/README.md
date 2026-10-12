@@ -126,6 +126,18 @@ Default output layout (default `output/<task_set>-<split>/`, override with `--ou
 └── <env_name>/episode_NNN.mp4          # per-episode video (tiles agentview_left/right + eye_in_hand)
 ```
 
+### Execution modes, paired seeds, machine-readable logs
+
+These flags are shared by `main.py` and `eval_all.py`. All are opt-in; the defaults reproduce the behaviour above.
+
+- `--execution_mode fixed --replan_steps h` (default, h=5): execute h actions per policy call.
+- `--execution_mode aac`: execute the server's per-call `aac_horizon`. Needs `groot_env/serve.py --aac`; see [Adaptive Action Chunking](../../groot_env/README.md#adaptive-action-chunking-aac).
+- `--seed_per_episode`: reset episode k with seed `--seed + k`, so episode k gets the same scene in every run.
+- `--log_dir DIR`: append `DIR/<env_name>/{episodes,inference}.jsonl`. These hold per-episode success, steps, policy calls, executed horizons and the initial-scene hash, plus per-call timing and any AAC diagnostics.
+- `--no-save_video`: skip mp4 writing.
+
+The AAC reproduction (`experiments/aac/run_arms.sh`) uses `--seed 0 --seed_per_episode --resize_size 256 --no-save_video`.
+
 ## Activation collection
 
 RoboCasa collects **server-side** — the client's `--collect` flag is identical for both pi0.5 and GR00T backends (same wire protocol, same `CollectionSession` helper); only the server command differs. Protocol, output layout, schema per model family, and verification are covered in the canonical reference — see **[`docs/activation_collection.md`](../../docs/activation_collection.md)**.

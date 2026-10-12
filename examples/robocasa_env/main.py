@@ -16,9 +16,13 @@ multiple parallel envs as in the MetaWorld example.
 
 import collections
 import dataclasses
+import hashlib
+import json
 import logging
 import math
 import os
+import time
+import uuid
 from typing import Optional
 
 import gymnasium as gym
@@ -35,6 +39,8 @@ from robocasa.utils.env_utils import convert_action
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
+
+EXECUTION_MODES = ("fixed", "aac")
 
 _MUTUALLY_EXCLUSIVE_MODE_ERROR = (
     "--collect and --steer are mutually exclusive; run activation collection and "
@@ -61,10 +67,28 @@ class Args:
     split: str = "pretrain"
     # Number of episodes to run.
     num_episodes: int = 1
+    # Index of the first episode (episodes run start_episode .. start_episode+num_episodes-1).
+    # With --seed_per_episode the scene of episode k depends only on k, so a crashed run
+    # can be resumed exactly; see experiments/aac/run_arms.sh.
+    start_episode: int = 0
     # Override the maximum steps per episode. If None, uses 1.5 * task horizon.
     max_steps: int | None = None
     # Number of steps to execute from the model's action plan before re-planning.
+    # Used when --execution_mode fixed (the default).
     replan_steps: int = 5
+    # How many predicted actions to execute per policy call:
+    #   fixed: exactly --replan_steps (COAST default behaviour).
+    #   aac:   the server's per-call "aac_horizon" (requires `groot_env/serve.py --aac`).
+    execution_mode: str = "fixed"
+    # If True, reset episode k with seed (--seed + k) instead of drawing scenes
+    # from one env-level RNG stream. Upstream AAC builds each trial's env with
+    # seed=trial_id; this makes episode k's scene independent of what happened
+    # in earlier episodes, so arms can be paired episode-by-episode.
+    seed_per_episode: bool = False
+    # Write per-episode video files.
+    save_video: bool = True
+    # If set, append machine-readable logs to <log_dir>/<env_name>/{episodes,inference}.jsonl.
+    log_dir: Optional[str] = None
 
     # Image resize size for the policy input.
     resize_size: int = 224
@@ -156,6 +180,65 @@ def build_state(obs: dict) -> np.ndarray:
     )
 
 
+def _scene_hash(env, obs: dict) -> str:
+    """Hash of the initial MuJoCo state (falls back to the proprio state) for
+    checking that two runs saw the same initial scene."""
+    try:
+        state = np.asarray(
+            env.unwrapped.env.sim.get_state().flatten(), dtype=np.float64
+        )
+    except Exception:  # noqa: BLE001
+        state = build_state(obs).astype(np.float64)
+    return hashlib.sha1(np.round(state, 6).tobytes()).hexdigest()[:16]
+
+
+def _model_hash(env) -> str | None:
+    """Hash of static scene geometry (body positions, geom sizes). Complements
+    _scene_hash, which only sees the simulation state."""
+    try:
+        model = env.unwrapped.env.sim.model
+        geo = np.concatenate(
+            [np.asarray(model.body_pos).ravel(), np.asarray(model.geom_size).ravel()]
+        )
+    except Exception:  # noqa: BLE001
+        return None
+    return hashlib.sha1(np.round(geo.astype(np.float64), 6).tobytes()).hexdigest()[:16]
+
+
+def _jsonable(x):
+    if isinstance(x, dict):
+        return {k: _jsonable(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [_jsonable(v) for v in x]
+    if isinstance(x, np.ndarray):
+        return x.tolist()
+    if isinstance(x, np.generic):
+        return x.item()
+    return x
+
+
+def _execution_horizon(args, result: dict, chunk_len: int) -> int:
+    """Number of actions of this chunk to queue, validated against the chunk."""
+    if args.execution_mode == "fixed":
+        h = int(args.replan_steps)
+    elif args.execution_mode == "aac":
+        if "aac_horizon" not in result:
+            raise RuntimeError(
+                "--execution_mode aac but the server response has no 'aac_horizon'; "
+                "start groot_env/serve.py with --aac"
+            )
+        h = int(result["aac_horizon"])
+    else:
+        raise ValueError(
+            f"Unknown execution_mode {args.execution_mode!r}; expected one of {EXECUTION_MODES}"
+        )
+    if not 1 <= h <= chunk_len:
+        raise RuntimeError(
+            f"Execution horizon {h} outside [1, {chunk_len}] ({args.execution_mode} mode)"
+        )
+    return h
+
+
 def eval_task(
     env_name: str,
     policy: _websocket_client_policy.WebsocketClientPolicy,
@@ -182,12 +265,37 @@ def eval_task(
         args.max_steps if args.max_steps is not None else int(task_horizon * 1.5)
     )
 
+    log_dir = getattr(args, "log_dir", None)
+    if log_dir is not None:
+        task_log_dir = os.path.join(log_dir, env_name)
+        os.makedirs(task_log_dir, exist_ok=True)
+        episodes_log = open(os.path.join(task_log_dir, "episodes.jsonl"), "a")
+        inference_log = open(os.path.join(task_log_dir, "inference.jsonl"), "a")
+    else:
+        episodes_log = inference_log = None
+    execution_mode = getattr(args, "execution_mode", "fixed")
+    # Identifies this client process in the logs: an episode interrupted by a crash
+    # leaves inference records whose (episode, run_id) never appears in episodes.jsonl.
+    run_id = uuid.uuid4().hex[:12]
+    save_video = getattr(args, "save_video", True)
+
     successes: list[bool] = []
-    for episode in range(args.num_episodes):
-        obs, info = env.reset()
+    start_episode = getattr(args, "start_episode", 0)
+    for episode in range(start_episode, start_episode + args.num_episodes):
+        episode_seed = (
+            args.seed + episode if getattr(args, "seed_per_episode", False) else None
+        )
+        obs, info = env.reset(seed=episode_seed)
+        scene_hash = _scene_hash(env, obs)
+        model_hash = _model_hash(env)
         task_lang = obs["annotation.human.task_description"]
         action_plan = collections.deque()
         success = False
+        inference_index = 0
+        executed_horizons: list[int] = []
+        policy_ms: list[float] = []
+        episode_t0 = time.perf_counter()
+        step = -1
 
         if collect_session is not None:
             collect_session.start_episode(
@@ -199,7 +307,10 @@ def eval_task(
             )
 
         video_path = os.path.join(task_output_dir, f"episode_{episode:03d}.mp4")
-        with iio.imopen(video_path, "w", plugin="pyav") as video:
+        video_ctx = (
+            iio.imopen(video_path, "w", plugin="pyav") if save_video else _NullVideo()
+        )
+        with video_ctx as video:
             video.init_video_stream("h264", fps=args.fps)
 
             pbar = tqdm(
@@ -209,11 +320,12 @@ def eval_task(
             )
             for step in pbar:
                 # Tile multiple cameras of the single env into a grid frame.
-                frames = [
-                    image_tools.convert_to_uint8(obs[CAMERA_KEYS[cam]])
-                    for cam in args.render_cameras
-                ]
-                video.write_frame(tile_frames(frames))
+                if save_video:
+                    frames = [
+                        image_tools.convert_to_uint8(obs[CAMERA_KEYS[cam]])
+                        for cam in args.render_cameras
+                    ]
+                    video.write_frame(tile_frames(frames))
 
                 if not action_plan:
                     img = image_tools.convert_to_uint8(
@@ -264,16 +376,40 @@ def eval_task(
                             beta=args.steering_beta,
                             strategy=args.steering_strategy,
                         )
+                    t_call = time.perf_counter()
                     result = policy.infer(element)
+                    roundtrip_ms = (time.perf_counter() - t_call) * 1000.0
                     action_chunk = result["actions"]  # (action_horizon, action_dim=12)
                     assert action_chunk.ndim == 2, (
                         f"Model output must have shape (action_horizon, action_dim), but got {action_chunk.shape}"
                     )
-                    assert action_chunk.shape[0] >= args.replan_steps, (
-                        f"Model must output at least {args.replan_steps} actions, got {action_chunk.shape[0]}"
+                    exec_h = _execution_horizon(args, result, action_chunk.shape[0])
+                    assert not action_plan, (
+                        "stale actions left in the plan at replan time"
                     )
-                    for t in range(args.replan_steps):
+                    for t in range(exec_h):
                         action_plan.append(action_chunk[t])
+                    executed_horizons.append(exec_h)
+                    policy_ms.append(roundtrip_ms)
+                    if inference_log is not None:
+                        record = {
+                            "task": env_name,
+                            "episode": episode,
+                            "run_id": run_id,
+                            "step": step,
+                            "inference_index": inference_index,
+                            "execution_mode": execution_mode,
+                            "executed_h": exec_h,
+                            "chunk_len": int(action_chunk.shape[0]),
+                            "roundtrip_ms": roundtrip_ms,
+                            "server_timing": _jsonable(result.get("server_timing", {})),
+                        }
+                        if "aac_horizon" in result:
+                            record["aac_horizon"] = int(result["aac_horizon"])
+                            record["aac"] = _jsonable(result.get("aac", {}))
+                        inference_log.write(json.dumps(record) + "\n")
+                        inference_log.flush()
+                    inference_index += 1
 
                 action = convert_action(action_plan.popleft())
                 obs, reward, terminated, truncated, info = env.step(action)
@@ -290,20 +426,82 @@ def eval_task(
         if collect_session is not None:
             collect_session.finalize_episode()
 
+        if episodes_log is not None:
+            episodes_log.write(
+                json.dumps(
+                    {
+                        "task": env_name,
+                        "split": args.split,
+                        "episode": episode,
+                        "run_id": run_id,
+                        "seed": args.seed,
+                        "episode_seed": episode_seed,
+                        "scene_hash": scene_hash,
+                        "model_hash": model_hash,
+                        "prompt": str(task_lang),
+                        "execution_mode": execution_mode,
+                        "replan_steps": int(args.replan_steps)
+                        if execution_mode == "fixed"
+                        else None,
+                        "success": bool(success),
+                        "env_steps": step + 1,
+                        "max_steps": max_steps,
+                        "num_policy_calls": len(executed_horizons),
+                        "executed_horizons": executed_horizons,
+                        "mean_executed_h": float(np.mean(executed_horizons))
+                        if executed_horizons
+                        else None,
+                        "policy_roundtrip_ms_total": float(np.sum(policy_ms)),
+                        "wall_s": time.perf_counter() - episode_t0,
+                    }
+                )
+                + "\n"
+            )
+            episodes_log.flush()
+
         successes.append(success)
         logger.info(
             f"[{env_name}] Episode {episode + 1}/{args.num_episodes}: success={success}, video={video_path}"
         )
 
     env.close()
+    if episodes_log is not None:
+        episodes_log.close()
+        inference_log.close()
 
     success_rate = float(np.mean(successes))
     return {"success_rate": success_rate, "num_episodes": float(len(successes))}
 
 
+class _NullVideo:
+    """Stand-in for the pyav writer when --save_video is off."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def init_video_stream(self, *args, **kwargs):
+        pass
+
+    def write_frame(self, frame):
+        pass
+
+
 def _validate_args(args: Args) -> None:
     if args.collect and args.steer:
         raise ValueError(_MUTUALLY_EXCLUSIVE_MODE_ERROR)
+    if args.execution_mode not in EXECUTION_MODES:
+        raise ValueError(
+            f"--execution_mode must be one of {EXECUTION_MODES}, got {args.execution_mode!r}"
+        )
+    if args.execution_mode == "fixed" and args.replan_steps < 1:
+        raise ValueError(f"--replan_steps must be >= 1, got {args.replan_steps}")
+    if args.execution_mode == "aac" and (args.collect or args.steer):
+        raise ValueError(
+            "--execution_mode aac cannot be combined with --collect or --steer"
+        )
 
 
 def main(args: Args) -> None:
@@ -311,7 +509,12 @@ def main(args: Args) -> None:
     np.random.seed(args.seed)
 
     policy = _websocket_client_policy.WebsocketClientPolicy(args.host, args.port)
-    logger.info(f"Server metadata: {policy.get_server_metadata()}")
+    server_metadata = policy.get_server_metadata()
+    logger.info(f"Server metadata: {server_metadata}")
+    if args.execution_mode == "aac" and not server_metadata.get("aac_enabled", False):
+        raise RuntimeError(
+            "--execution_mode aac requires a server started with `serve.py --aac`"
+        )
 
     if args.output_dir is not None:
         output_dir = args.output_dir

@@ -33,6 +33,8 @@ import socket
 
 import tyro
 
+import aac as aac_lib
+import groot_aac
 import groot_activation_collector
 import groot_adapter
 import groot_steering
@@ -76,6 +78,22 @@ class Args:
     steer: bool = False
     # Path to a GR00T-compatible conceptor NPZ. Required when --steer is set.
     conceptor_npz: str | None = None
+    # Adaptive Action Chunking (arXiv:2604.04161). Every request draws N
+    # candidate chunks in one batched pass, runs the upstream AAC selector, and
+    # returns candidate 0's chunk plus "aac_horizon". Defaults are the official
+    # release's (gr00t-multi-sample policy_server_robocasa.py, robocasa
+    # AAC_evaluation.sh). See groot_aac.py and experiments/aac/.
+    aac: bool = False
+    # Number of candidate chunks N (upstream: 20).
+    aac_num_samples: int = aac_lib.DEFAULT_NUM_SAMPLES
+    # Reseed python/numpy/torch with this value before EVERY call (upstream
+    # seed_per_step=True with 42). Pass None to keep a running RNG stream.
+    aac_seed: int | None = aac_lib.DEFAULT_SEED
+    # Minimum-motion threshold alpha / move_th (upstream: 3.0).
+    aac_move_th: float = aac_lib.DEFAULT_MOVE_TH
+    # Also return the raw (N, H, 12) candidates on every response (debug only;
+    # clients can request them per call with groot_aac.AAC_RETURN_CANDIDATES_KEY).
+    aac_return_candidates: bool = False
 
 
 def _build_policy(args: Args):
@@ -98,6 +116,13 @@ def _validate_args(args: Args) -> None:
         )
     if args.steer and not args.conceptor_npz:
         raise ValueError("--steer requires --conceptor_npz")
+    if args.aac and (args.steer or args.collect_activations):
+        raise ValueError(
+            "--aac is mutually exclusive with --steer and --collect_activations "
+            "(AAC multi-sample inference does not run steering hooks or collectors)."
+        )
+    if args.aac and args.aac_num_samples < 1:
+        raise ValueError("--aac-num-samples must be >= 1")
 
 
 def main(args: Args) -> None:
@@ -117,6 +142,27 @@ def main(args: Args) -> None:
         "embodiment": args.embodiment,
         "denoising_steps": args.denoising_steps,
     }
+
+    if args.aac:
+        import torch
+
+        # Upstream GrootWrapPolicy.set_seed(42) at init also pins cuDNN.
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        logging.info(
+            "AAC enabled (num_samples=%d, seed_per_call=%s, move_th=%s)",
+            args.aac_num_samples,
+            args.aac_seed,
+            args.aac_move_th,
+        )
+        policy = groot_aac.AACGrootPolicyWrapper(
+            policy,
+            num_samples=args.aac_num_samples,
+            seed=args.aac_seed,
+            move_th=args.aac_move_th,
+            return_candidates=args.aac_return_candidates,
+        )
+        metadata.update(policy.metadata)
 
     if args.steer:
         logging.info("GR00T steering enabled (conceptor_npz=%s)", args.conceptor_npz)

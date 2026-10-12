@@ -118,6 +118,15 @@ class Args:
     max_steps: Optional[int] = None
     # Number of steps to execute from the model's action plan before re-planning.
     replan_steps: int = 5
+    # "fixed" (execute --replan_steps) or "aac" (execute the server's per-call
+    # "aac_horizon"; needs `groot_env/serve.py --aac`). Forwarded to main.py.
+    execution_mode: str = "fixed"
+    # Forwarded to main.py: reset episode k with seed (--seed + k).
+    seed_per_episode: bool = False
+    # Forwarded to main.py: write per-episode mp4s.
+    save_video: bool = True
+    # Forwarded to main.py: machine-readable logs under <log_dir>/<env_name>/.
+    log_dir: Optional[str] = None
 
     # Image resize size for the policy input.
     resize_size: int = 224
@@ -228,6 +237,14 @@ def _build_command(
         "--output_dir",
         output_dir,
     ]
+    if args.execution_mode != "fixed":
+        cmd.extend(["--execution_mode", args.execution_mode])
+    if args.seed_per_episode:
+        cmd.append("--seed_per_episode")
+    if not args.save_video:
+        cmd.append("--no-save_video")
+    if args.log_dir is not None:
+        cmd.extend(["--log_dir", os.path.abspath(args.log_dir)])
     # Forward render_cameras as a single --render_cameras flag followed by all
     # values (tyro's List[str] fields use nargs='+' semantics in this venv, so
     # repeated --render_cameras flags would silently keep only the last value).

@@ -388,6 +388,24 @@ class GR00TAdapterPolicy(_base_policy.BasePolicy):
             "steering_metadata": steering_metadata,
         }, steering_metadata
 
+    def infer_multi_sample(
+        self, obs: dict[str, Any], *, num_samples: int, seed: int | None
+    ) -> tuple[dict[str, np.ndarray], np.ndarray]:
+        """Draw `num_samples` action chunks for ONE observation (AAC).
+
+        Returns ``(action_dict, normalized_action)``: per-key unnormalized
+        arrays of shape (N, H, d) and the pre-unnormalization model output
+        (N, H, 32). See `_get_action_multi_sample` for the sampling contract.
+        """
+        groot_obs = self._build_groot_obs(obs)
+        return _get_action_multi_sample(
+            self._policy, groot_obs, num_samples=num_samples, seed=seed
+        )
+
+    def action_dict_to_array(self, action_dict: dict[str, Any]) -> np.ndarray:
+        """Concatenate per-key actions in client order (works for (H, d) or (N, H, d))."""
+        return self._action_dict_to_array(action_dict)
+
     def reset(self) -> None:
         # N1.5 Gr00tPolicy is stateless between calls; nothing to reset.
         pass
@@ -753,6 +771,136 @@ def _get_action_with_steering(gr00t_policy, groot_obs, *, steering_hooks):
         ]
     }
     return unnormalized_action, steering_metadata
+
+
+def seed_everything(seed: int) -> None:
+    """Upstream AAC per-call reseed (gr00t-multi-sample `Gr00tPolicy.get_action`
+    with ``seed_per_step=True``): python, numpy, torch, all CUDA devices. Upstream
+    also calls ``tf.random.set_seed(42)``; TF is not on the inference path, so
+    it is omitted here."""
+    import random
+
+    import torch
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
+def _get_action_multi_sample(gr00t_policy, groot_obs, *, num_samples, seed):
+    """Sample N action chunks for one observation, sharing one backbone pass.
+
+    Port of the AAC fork's multi-sample inference
+    (Adaptive-Action-Chunking/gr00t-multi-sample @ 11e926b):
+      - `Gr00tPolicy.get_action`: if ``seed_per_step`` reseed (42) BEFORE
+        transforms; return the unnormalized action dict plus
+        ``normalized_action`` = ``action_pred.float()`` (N, H, 32).
+      - `GR00T_N1_5.get_action(inputs, n_samples)`: prepare_input + ONE
+        backbone forward, then the action head.
+      - `FlowmatchingActionHead.get_action(..., n_samples)`: process the
+        backbone output once, then ``expand`` vl_embs / embodiment_id / state
+        to N, draw ``torch.randn(N, H, action_dim)`` and run the unchanged
+        Euler loop on the batch. Candidates therefore share identical VL
+        conditioning and state, and differ ONLY through the initial noise.
+
+    ``seed=None`` skips the reseed (the RNG stream simply continues), which with
+    num_samples=1 is exactly NVIDIA's `Gr00tPolicy.get_action` math.
+
+    Returns ``(action_dict, normalized_action)`` with action_dict values of
+    shape (N, H, d) float32 and normalized_action (N, H, 32) float32. Unlike
+    upstream there is no global ``np.squeeze``; `aac.build_upstream_pred_action_dict`
+    reproduces upstream's layout for the selector.
+    """
+    import torch
+
+    if num_samples < 1:
+        raise ValueError(f"num_samples must be >= 1, got {num_samples}")
+
+    obs_copy = {}
+    for k, v in groot_obs.items():
+        if not isinstance(v, np.ndarray) and not isinstance(v, list):
+            obs_copy[k] = np.array(v)
+        else:
+            obs_copy[k] = v
+
+    from gr00t.model.policy import unsqueeze_dict_values
+
+    if not gr00t_policy._check_state_is_batched(obs_copy):
+        obs_copy = unsqueeze_dict_values(obs_copy)
+
+    if seed is not None:
+        seed_everything(seed)
+
+    normalized_input = gr00t_policy.apply_transforms(obs_copy)
+
+    model = gr00t_policy.model
+    head = model.action_head
+    autocast_device_type = torch.device(gr00t_policy.device).type
+    if autocast_device_type in ("cuda", "mps"):
+        ac_ctx = torch.autocast(device_type=autocast_device_type, dtype=torch.bfloat16)
+    else:
+        ac_ctx = contextlib.nullcontext()
+
+    # Same context as upstream `Gr00tPolicy._get_action_from_normalized_input`.
+    with torch.inference_mode(), ac_ctx:
+        backbone_inputs, action_inputs = model.prepare_input(normalized_input)
+        backbone_outputs = model.backbone(backbone_inputs)
+
+        backbone_output = head.process_backbone_output(backbone_outputs)
+        vl_embs = backbone_output.backbone_features
+        if vl_embs.shape[0] != 1:
+            raise ValueError(
+                f"multi-sample inference expects one observation, got batch {vl_embs.shape[0]}"
+            )
+        vl_embs = vl_embs.expand(num_samples, -1, -1)
+        embodiment_id = action_inputs.embodiment_id.expand(num_samples)
+        state = action_inputs.state.expand(num_samples, -1, -1)
+        state_features = head.state_encoder(state, embodiment_id)
+
+        batch_size = vl_embs.shape[0]
+        device = vl_embs.device
+        actions = torch.randn(
+            size=(batch_size, head.config.action_horizon, head.config.action_dim),
+            dtype=vl_embs.dtype,
+            device=device,
+        )
+
+        num_steps = head.num_inference_timesteps
+        dt = 1.0 / num_steps
+        for t in range(num_steps):
+            t_cont = t / float(num_steps)
+            t_discretized = int(t_cont * head.num_timestep_buckets)
+            timesteps_tensor = torch.full(
+                size=(batch_size,), fill_value=t_discretized, device=device
+            )
+            action_features = head.action_encoder(
+                actions, timesteps_tensor, embodiment_id
+            )
+            if head.config.add_pos_embed:
+                pos_ids = torch.arange(
+                    action_features.shape[1], dtype=torch.long, device=device
+                )
+                pos_embs = head.position_embedding(pos_ids).unsqueeze(0)
+                action_features = action_features + pos_embs
+            future_tokens = head.future_tokens.weight.unsqueeze(0).expand(
+                vl_embs.shape[0], -1, -1
+            )
+            sa_embs = torch.cat((state_features, future_tokens, action_features), dim=1)
+            model_output = head.model(
+                hidden_states=sa_embs,
+                encoder_hidden_states=vl_embs,
+                timestep=timesteps_tensor,
+            )
+            pred = head.action_decoder(model_output, embodiment_id)
+            pred_velocity = pred[:, -head.action_horizon :]
+            actions = actions + dt * pred_velocity
+
+    normalized_action = actions.float()
+    unnormalized = gr00t_policy.unapply_transforms({"action": normalized_action.cpu()})
+    action_dict = {k: np.asarray(v, dtype=np.float32) for k, v in unnormalized.items()}
+    return action_dict, normalized_action.cpu().numpy().astype(np.float32)
 
 
 def make_robocasa_policy(

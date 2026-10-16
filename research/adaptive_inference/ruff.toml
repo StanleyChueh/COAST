@@ -1,0 +1,15 @@
+# Lint config for the adaptive-inference research code.
+# The files listed under per-file-ignores / format.exclude are sha256-pinned in
+# results/adaptive_inference/pilot/PREREG_FROZEN.txt (the pilot ran exactly those bytes),
+# so style rules that would rewrite them are disabled instead of fixing them.
+# Never run `ruff check --fix` / `ruff format` on them.
+extend = "../../pyproject.toml"
+
+[lint.per-file-ignores]
+"intervention_server.py" = ["SLF001", "UP038", "RET504", "I001", "F401"]
+"fork/*.py" = ["SLF001", "UP", "SIM", "C4", "PERF", "FBT002", "RUF005", "E402", "I001", "RUF100", "F401", "RET501"]
+"validate_operators.py" = ["SLF001", "E402", "I001", "UP038"]
+"tests/*.py" = ["E402", "I001"]
+
+[format]
+exclude = ["intervention_server.py", "fork/libero_fork.py", "fork/sim_snapshot.py"]

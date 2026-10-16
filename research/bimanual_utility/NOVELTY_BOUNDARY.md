@@ -121,3 +121,16 @@ We reuse BiCoord's SMP definition rather than inventing a coordination metric.
     - SkillVLA and TAO-DA report idle-arm drift or empty grasps qualitatively, which favours a measurable clamp effect;
     - but BiCoord's 26% dataset SMP means the demonstrations contain little parallelism, so the realizable efficiency headroom inside the data may be small.
 - **Top-conference strength:** only if the pilot finds a learning-gap effect that clears noise, sits on certified-feasible scenes, and replicates on X-VLA. Otherwise the defensible output is a benchmark audit ("how bimanual are bimanual benchmarks").
+
+## 7. Addendum 2026-10-17: final pre-pilot check and the three-level framing
+
+**Collision check** (`LITERATURE.md` addendum): no collision. The hard-stop condition is not met. Coordi-π, PEAfowl, M3, CoLA, RoboAware, RoboPace and BiRoAD each occupy a *method* niche, which rules them out as our final method. None measures the three levels below.
+
+**Three levels** (second brief). These are the same decomposition as §3, made explicit:
+1. **Physical opportunity:** planner/expert dual vs certified best single (`PILOT_PREREG.md` A).
+2. **Demonstration utilization:** what the scripted demonstrator (= E2, which generated the training data) actually realizes. Concurrency, idle-arm motion, action count, and the share of the overlap value it uses.
+3. **VLA realization:** what π0.5 reproduces of level 2 (clamp C1, parallel realization C2, phase behaviour C3).
+
+**Gate G** (source of the gap: data, model, both, neither) is added *before any rollout* by `PILOT_PREREG_AMENDMENT_1.md`. A data-only gap (G1) is explicitly **not** a VLA claim.
+
+**Additional caution.** C1 (idle-arm clamp) alone is close to TAO-DA's interference study. A positive C1 counts toward a *VLA* contribution only together with the three-level decomposition, not as a standalone "interference" finding.

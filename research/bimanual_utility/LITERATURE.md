@@ -85,3 +85,28 @@ Context-only mentions (not bimanual-utility papers):
 - Quantifies how much of the available utility a VLA realizes, on ≥ 2 backbones.
 
 The most criteria any single paper meets is 3.5 of 8 (BiCoord, Co-VLA), and those are only the generic criteria: modern VLAs, multiple task families, multiple backbones, partial efficiency. **No paper meets any of the four substantive criteria** (see `NOVELTY_BOUNDARY.md` §2).
+
+## Addendum 2026-10-17: final pre-pilot collision check
+
+**Method.**
+- Web search (extended) for each paper named in the second brief.
+- An arXiv API sweep of every listing whose abstract contains *bimanual*, *dual-arm*, *dual arm* or *two arms*, submitted 2026-09-01 … 2026-10-17. That is 197 entries; titles were screened and abstracts read for 13.
+- A direct arXiv title/abstract search for *DialogVLA* (0 hits).
+
+| Paper | Year / Venue | Task / env | Backbone | Bimanual property | Single-arm baseline? | Matched dual-vs-single? | Feasibility control? | Noise control? | Level | Contribution | Overlap | Novelty boundary |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| **Coordi-π** 2610.19753 [A] | 2026-10-14 arXiv | DexJoCo bimanual dexterous (5 sim) + 4 real | π0.5 | left/right **action representation** (interleaved per-hand tokens, hand-identity embedding, factorized RoPE for temporal sync) | no | no | no | no | task | structured dual-hand action tokens | left/right representation (**occupied**) | method; no utility measurement |
+| **PEAfowl** 2601.17885 [A] | 2026 / RA-L | RoboTwin 2.0 (randomized) + real | VLA with depth-lifted multi-view fusion | multi-view 3D perception + language readout | no | no | no | no | task | +23 pp on RoboTwin 2.0 hard | multi-view perception (**occupied**) | not about arm utility |
+| **Robust Bimanual VLA via Modality Masking (M3)** 2608.22419 [A] | 2026-08-23 arXiv | 10 RoboTwin 2.0 tasks + 3 real | VLA (training-only masking) | robustness via random input-channel masking | no | no | no | no | task | training-time modality masking | masks *inputs*. We clamp *outputs* of an arm the demonstrator leaves idle | different intervention and question |
+| **CoLA** 2610.15337 [A] | 2026-10-11 arXiv | multi-agent handover tasks | frozen VLAs + message adapters | **when explicit inter-agent communication is necessary** (message channel ablation) | per-agent VLAs | no | no | ? | task | necessity of *information exchange* | "necessity" framing, but of communication between agents | not arm utility; no single-arm feasibility |
+| **RoboAware** 2610.11480 [A] | 2026-10-08 arXiv | coding agent + frozen policies | skill orchestration | state-locked counterfactual branching to label which skill family succeeds | n/a | n/a | n/a | ? | state | counterfactual responsibility coordinator | methodological precedent for same-state branching (cf. our adaptive-inference fork harness) | not bimanual utility |
+| **RoboPace** 2610.09696 [A] | 2026-10-07 arXiv | action-chunk policies | retiming layer | VLAs **inherit demonstrator timing** | no | no | no | no | step | contact-aware time-optimal retiming | supports Level-2 → Level-3 inheritance (timing comes from the demos) | single-arm timing, not bimanual utility |
+| **BiRoAD** 2609.23445 [A] | 2026-09-20 arXiv | bimanual | role-adaptive decomposition | role exchange across scenes | no | no | no | no | scene | role-adaptive representations | arm roles (**occupied**) | not utility |
+| JAMB 2609.25322, RoboCousin 2609.08339, FineART 2609.36416, BrickCraft-Duo 2609.28281, BiGym 2.0 2610.07594, DexJoCo-X 2610.03278, XR-2 2609.03591 [A] | 2026-09/10 | various bimanual | various | methods, data generation, datasets, benchmarks | no | no | no | no | task | — | none on utility | — |
+| **DialogVLA** | — | — | — | — | — | — | — | — | — | **still not found** (web ×4, arXiv API title/abstract) | treated as unverified | — |
+
+**Result: no collision.** No paper measures physical single-arm feasibility vs available dual-arm benefit vs demonstration utilization vs VLA-realized utilization under matched scenes and replicated policy noise. Newly occupied (do not build a method on these):
+- left/right action tokenization and synchronization (Coordi-π);
+- multi-view perception (PEAfowl);
+- input-modality masking (M3);
+- inter-agent communication necessity (CoLA).

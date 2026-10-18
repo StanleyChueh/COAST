@@ -1,5 +1,38 @@
 # Research status: Bimanual Utilization Gap
 
+## Update 2026-10-18: Gate 0 outcome. GATE0 FAIL — SCIENTIFICALLY INVALID (BLOCKED)
+
+**Why it is blocked.** Slot P1 exhausted its preregistered reserves on G0.8 (π0.5 operating range [10%, 95%]):
+
+| P1 task | result |
+|---|---|
+| `pick_dual_bottles` | removed (amendment 3) |
+| `place_cans_plasticbox` | V2 SR 20/20 |
+| `place_burger_fries` | V2 SR 20/20 (amendment 5) |
+
+`PILOT_PREREG.md` §9 defines this as BLOCKED, so **the π0.5 pilot was not run**. No pilot decision (NO-GO / DATA-GAP / MODEL-GAP / MIXED-GAP) is issued, and X-VLA was not prepared.
+
+**Other findings.**
+- lift_pot failed G0.5 twice: 0.867, then 0.90 after the one allowed predicate revision. Every disagreement sits in the official predicate's two-TCP tolerance.
+- The calibration block shows that one-arm feasibility on RoboTwin's parallel tasks is mostly reach-blocked, so the physical (dual vs certified single-arm) layer is weakly identifiable on this benchmark.
+- π0.5 succeeds at or near ceiling on the parallel tasks.
+
+**Full reports** are in the experiment repo `~/Stanley_ws/bimanual-utility/research/`:
+- `GATE0_REPORT.md`
+- `RESEARCH_STATUS.md`
+- `STOCHASTICITY_AUDIT.md`
+- `UTILIZATION_DECOMPOSITION.md`
+- `FAILURE_ANALYSIS.md`
+- `PILOT_RESULTS.md`
+- `ANALYSIS_FREEZE.md`
+
+They are at commit `934eb33` (tag `gate0-blocked-v1`), with provenance in `fa35bc9`.
+
+**Recommended next step: one separately preregistered kill test.** It measures demonstration → VLA efficiency (E_par, ρ) on the frozen, unseen analysis seeds of the four two-arm parallel tasks. Its stop rule closes the direction if π0.5 realizes the demonstrated efficiency.
+
+---
+
+
 Date: 2026-10-16. Branch `bimanual-utility-2027` (COAST). Session scope: audit + design only.
 - no VLA trained;
 - no rollout run;
